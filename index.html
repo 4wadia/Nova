@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nova Media Player</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+
+    <!-- Tailwind Config -->
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              // Dark Matter Palette (Zinc based)
+              primary: "#ffffff", 
+              "primary-dark": "#e4e4e7", // zinc-200
+              
+              "background-light": "#f4f4f5", // zinc-100
+              "background-dark": "#09090b", // zinc-950 (Main BG)
+              
+              "surface-dark": "#18181b", // zinc-900 (Card BG)
+              "surface-highlight": "#27272a", // zinc-800
+              
+              "border-dark": "#27272a", // zinc-800
+              
+              "text-main": "#fafafa", // zinc-50
+              "text-muted": "#a1a1aa", // zinc-400
+              
+              // Accents
+              "hdr-gold": "#fbbf24",
+              "atmos-teal": "#2dd4bf",
+              "vision-purple": "#c084fc",
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              mono: ["JetBrains Mono", "monospace"],
+            },
+            borderRadius: {
+              lg: "0.5rem",
+              xl: "0.75rem",
+              '2xl': "1rem",
+              '3xl': "1.5rem",
+            },
+            animation: {
+              'spin-slow': 'spin 12s linear infinite',
+              'slide-in-right': 'slideInRight 0.3s ease-out forwards',
+              'fade-in': 'fadeIn 0.5s ease-out forwards',
+            },
+            keyframes: {
+              slideInRight: {
+                '0%': { transform: 'translateX(100%)' },
+                '100%': { transform: 'translateX(0)' },
+              },
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden; /* Prevent scroll on main view */
+      }
+      /* Custom scrollbar */
+      ::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+          background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+          background: #27272a; 
+          border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+          background: #3f3f46; 
+      }
+      
+      /* Range Input Styling */
+      input[type=range] {
+        -webkit-appearance: none; 
+        background: transparent; 
+      }
+      input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+      }
+      input[type=range]:focus {
+        outline: none; 
+      }
+
+      /* View Transitions */
+      ::view-transition-old(root),
+      ::view-transition-new(root) {
+        animation: none;
+        mix-blend-mode: normal;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react-dom": "https://esm.sh/react-dom@^19.2.4"
+  }
+}
+</script>
+</head>
+  <body class="bg-background-light dark:bg-background-dark text-gray-900 dark:text-text-main font-sans antialiased selection:bg-white selection:text-black">
+    <div id="root"></div>
+  </body>
+</html>
