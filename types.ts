@@ -41,4 +41,5 @@ export interface VideoFile {
     size: number;
     metadata: VideoMetadata;
     lastPlayed?: number; // timestamp in seconds
+    thumbnail?: string; // data URL of a captured frame
 }
