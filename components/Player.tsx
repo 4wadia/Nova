@@ -73,12 +73,7 @@ const formatBytes = (bytes: number) => {
 
 // --- SVG Icons ---
 
-const LogoDolby = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 32 32" className={className} fill="currentColor">
-    {/* Double D Symbol */}
-    <path d="M4 8h6c4.4 0 8 3.6 8 8s-3.6 8-8 8H4V8zm6 13c2.8 0 5-2.2 5-5s-2.2-5-5-5H7v10h3zm18-13h-6c-4.4 0-8 3.6-8 8s3.6 8 8 8h6V8zm-6 13c-2.8 0-5-2.2-5-5s2.2-5 5-5h3v10h-3z" />
-  </svg>
-);
+import { BadgeDolbyVision, BadgeDolbyAtmos, BadgeHDR10Plus, BadgeDTS, BadgeDDPlus } from './FormatBadges';
 
 const formatTime = (seconds: number) => {
   if (!seconds || isNaN(seconds)) return "0:00";
@@ -114,6 +109,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
   // Video Settings State
   const [aspectRatio, setAspectRatio] = useState('fit');
   const [colorSpace, setColorSpace] = useState<'bt709' | 'dcip3' | 'bt2020' | 'srgb'>('bt709');
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
 
   // Audio State
   const [audioTracks, setAudioTracks] = useState<Track[]>([]);
@@ -1026,6 +1022,35 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
 
                 <div className="h-px bg-white/10 w-full"></div>
 
+                {/* Section: Playback Speed */}
+                <div>
+                    <h5 className="text-[10px] uppercase font-bold text-white/40 mb-3 tracking-wider">Playback Speed</h5>
+                    <div className="grid grid-cols-6 gap-1.5">
+                        {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
+                            <button
+                                key={speed}
+                                onClick={() => {
+                                    if (videoRef.current) {
+                                        videoRef.current.playbackRate = speed;
+                                        setPlaybackSpeed(speed);
+                                    }
+                                }}
+                                className={`
+                                    text-[9px] py-1.5 rounded border transition-all duration-200
+                                    ${playbackSpeed === speed
+                                        ? 'bg-white text-black border-white font-bold'
+                                        : 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:border-white/20'
+                                    }
+                                `}
+                            >
+                                {speed}x
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="h-px bg-white/10 w-full"></div>
+
                 {/* Section: Subtitles */}
                 <div>
                    <div className="flex items-center justify-between mb-3">
@@ -1270,31 +1295,26 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
                                 }
                             `}>
                                 {isDolbyVision ? (
-                                    <>
-                                        <LogoDolby className="w-3.5 h-3.5 mr-1.5" />
-                                        <span className="text-[10px] font-black tracking-wider leading-none">VISION</span>
-                                    </>
+                                    <BadgeDolbyVision className="h-2.5 text-[10px]" />
+                                ) : video.metadata.hdrType === 'HDR10+' ? (
+                                    <BadgeHDR10Plus className="h-2.5 text-[10px]" />
                                 ) : (
-                                    <span className="text-[10px] font-bold tracking-wider leading-none">
-                                        {video.metadata.hdrType === 'HDR10+' ? 'HDR10+' : 'HDR'}
-                                    </span>
+                                    <span className="text-[10px] font-bold tracking-wider leading-none">HDR</span>
                                 )}
                             </div>
                         )}
 
                         {isAtmos ? (
                             <div className="flex items-center px-2 py-0.5 rounded border border-white/30 bg-white/10 text-white select-none">
-                                <LogoDolby className="w-3.5 h-3.5 mr-1.5" />
-                                <span className="text-[10px] font-black tracking-wider leading-none">ATMOS</span>
+                                <BadgeDolbyAtmos className="h-2.5 text-[10px]" />
                             </div>
                         ) : isDTS ? (
                             <div className="flex items-center px-2 py-0.5 rounded border border-white/20 bg-black/20 text-white/80 select-none">
-                                <span className="text-[10px] font-black tracking-wider leading-none">DTS</span>
+                                <BadgeDTS className="h-2.5 text-[12px]" />
                             </div>
                         ) : isDD ? (
                            <div className="flex items-center px-2 py-0.5 rounded border border-white/20 bg-black/20 text-white/80 select-none">
-                               <LogoDolby className="w-3.5 h-3.5 mr-1.5" />
-                               <span className="text-[10px] font-black tracking-wider leading-none">DD+</span>
+                               <BadgeDDPlus className="h-2.5 text-[10px]" />
                            </div>
                         ) : null}
                    </div>

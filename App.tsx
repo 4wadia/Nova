@@ -128,14 +128,21 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {library.map(video => (
-                        <VideoTile key={video.id} video={video} onClick={playVideo} />
+                    {library.map((video, index) => (
+                        <div
+                            key={video.id}
+                            className="animate-fade-in"
+                            style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
+                        >
+                            <VideoTile video={video} onClick={playVideo} />
+                        </div>
                     ))}
                     
                     {/* Add Card */}
                     <div 
                         onClick={() => document.getElementById('add-more-input')?.click()}
-                        className="group flex flex-col items-center justify-center aspect-video rounded-2xl border border-dashed border-zinc-300 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-all cursor-pointer"
+                        className="animate-fade-in group flex flex-col items-center justify-center aspect-video rounded-xl border border-dashed border-zinc-300 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-all duration-300 ease-out hover:-translate-y-1 cursor-pointer"
+                        style={{ animationDelay: `${library.length * 50}ms`, animationFillMode: 'both' }}
                     >
                         <span className="material-icons-round text-3xl text-zinc-400 dark:text-text-muted group-hover:text-zinc-600 dark:group-hover:text-white mb-2 transition-colors">add</span>
                         <span className="text-xs text-zinc-500 dark:text-text-muted font-medium group-hover:text-zinc-700 dark:group-hover:text-white transition-colors">Add to Library</span>
