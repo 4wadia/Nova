@@ -4,6 +4,7 @@ import { VideoFile } from '../types';
 interface PlayerProps {
   video: VideoFile;
   onBack: () => void;
+  onProgress?: (position: number, duration: number) => void;
 }
 
 interface SubtitleCue {
@@ -17,6 +18,7 @@ interface Track {
     label: string;
     lang?: string;
     isDefault?: boolean;
+    cues?: SubtitleCue[];
 }
 
 // --- Helper: SRT Parser ---
@@ -86,7 +88,25 @@ const formatTime = (seconds: number) => {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 };
 
-export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
+const detectBrowserName = (userAgent: string) => {
+  if (/edg\//i.test(userAgent)) return 'Edge';
+  if (/opr\//i.test(userAgent)) return 'Opera';
+  if (/chrome\//i.test(userAgent)) return 'Chrome';
+  if (/firefox\//i.test(userAgent)) return 'Firefox';
+  if (/safari\//i.test(userAgent) && !/chrome\//i.test(userAgent)) return 'Safari';
+  return 'Unknown Browser';
+};
+
+const detectPlatformName = (userAgent: string, platform: string) => {
+  if (/windows/i.test(userAgent) || /win/i.test(platform)) return 'Windows';
+  if (/mac os x|macintosh/i.test(userAgent) || /mac/i.test(platform)) return 'macOS';
+  if (/android/i.test(userAgent)) return 'Android';
+  if (/iphone|ipad|ipod/i.test(userAgent)) return 'iOS';
+  if (/linux/i.test(userAgent) || /linux/i.test(platform)) return 'Linux';
+  return platform || 'Unknown Platform';
+};
+
+export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const subtitleInputRef = useRef<HTMLInputElement>(null);
@@ -118,13 +138,12 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
   // Subtitle State
   const [subtitleTracks, setSubtitleTracks] = useState<Track[]>([]);
   const [selectedSubtitleTrack, setSelectedSubtitleTrack] = useState<string>('off');
-  
-  // Parsed cues for the currently selected subtitle track
-  const [activeCues, setActiveCues] = useState<SubtitleCue[]>([]);
   const [currentSubtitle, setCurrentSubtitle] = useState<string>('');
   
   const [subtitleSize, setSubtitleSize] = useState(1); // 1 = 100%
   const [subtitleOffset, setSubtitleOffset] = useState(0); // in seconds
+  const [subtitleBackgroundColor, setSubtitleBackgroundColor] = useState('rgba(0,0,0,0.4)');
+  const [subtitleTextColor, setSubtitleTextColor] = useState('#ffffff');
   
   // Real-time Stats State
   const [realtimeStats, setRealtimeStats] = useState({
@@ -146,6 +165,9 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
   const [isScreenHDR, setIsScreenHDR] = useState(false);
   
   const controlsTimeoutRef = useRef<number | null>(null);
+  const lastProgressEmitRef = useRef(0);
+  const copySpecsTimeoutRef = useRef<number | null>(null);
+  const [specsCopyState, setSpecsCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   // --- Initialize Tracks (Mocking based on Metadata) ---
   useEffect(() => {
@@ -272,6 +294,160 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
   const isDTS = video.metadata.audioCodec?.includes('DTS');
   const isDD = video.metadata.audioCodec === 'Dolby Digital';
   const wasPlayed = !!video.lastPlayed;
+
+  const runtimeInfo = useMemo(() => {
+    if (typeof navigator === 'undefined') {
+      return {
+        userAgent: 'Unavailable',
+        browser: 'Unknown Browser',
+        platform: 'Unknown Platform',
+      };
+    }
+
+    const userAgent = navigator.userAgent || 'Unavailable';
+    const platform = navigator.platform || '';
+    return {
+      userAgent,
+      browser: detectBrowserName(userAgent),
+      platform: detectPlatformName(userAgent, platform),
+    };
+  }, []);
+
+  const selectedAudioTrackLabel = useMemo(() => {
+    return audioTracks.find((track) => track.id === selectedAudioTrack)?.label ?? 'Unknown';
+  }, [audioTracks, selectedAudioTrack]);
+
+  const effectiveDuration = duration > 0 ? duration : video.metadata.durationSeconds;
+  const playedPercent = useMemo(() => {
+    if (!effectiveDuration || effectiveDuration <= 0) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, (currentTime / effectiveDuration) * 100));
+  }, [currentTime, effectiveDuration]);
+
+  const droppedFramePercent = useMemo(() => {
+    if (realtimeStats.totalFrames <= 0) {
+      return 0;
+    }
+    return (realtimeStats.dropped / realtimeStats.totalFrames) * 100;
+  }, [realtimeStats.dropped, realtimeStats.totalFrames]);
+
+  const estimatedSourceBitrateMbps = useMemo(() => {
+    if (!effectiveDuration || effectiveDuration <= 0 || video.size <= 0) {
+      return null;
+    }
+    return (video.size * 8) / effectiveDuration / 1_000_000;
+  }, [effectiveDuration, video.size]);
+
+  const streamHealth = useMemo(() => {
+    if (realtimeStats.buffer < 1) return 'Critical';
+    if (droppedFramePercent > 2) return 'Degraded';
+    if (droppedFramePercent > 0.5) return 'Fair';
+    return 'Stable';
+  }, [droppedFramePercent, realtimeStats.buffer]);
+
+  const nerdSnapshot = useMemo(() => {
+    return {
+      media: {
+        id: video.id,
+        name: video.name,
+        sizeBytes: video.size,
+        sizeLabel: formatBytes(video.size),
+        container: video.metadata.container,
+        resolution: video.metadata.resolution,
+        durationSeconds: effectiveDuration,
+        estimatedBitrateMbps: estimatedSourceBitrateMbps,
+      },
+      playback: {
+        positionSeconds: currentTime,
+        playedPercent,
+        playbackSpeed,
+        volumePercent: Math.round(volume * 100),
+        muted: isMuted,
+        aspectRatio,
+      },
+      render: {
+        droppedFrames: realtimeStats.dropped,
+        totalFrames: realtimeStats.totalFrames,
+        droppedFramePercent,
+        fps: realtimeStats.fps,
+        bufferSeconds: Number(realtimeStats.buffer.toFixed(2)),
+        streamHealth,
+      },
+      output: {
+        viewport: `${realtimeStats.viewportWidth}x${realtimeStats.viewportHeight}`,
+        display: `${realtimeStats.displayWidth}x${realtimeStats.displayHeight}`,
+        source: `${realtimeStats.videoWidth}x${realtimeStats.videoHeight}`,
+        colorSpace: colorSpace.toUpperCase(),
+        hdr: video.metadata.hdrType || 'SDR',
+      },
+      audio: {
+        activeTrack: selectedAudioTrackLabel,
+        codec: video.metadata.audioCodec,
+        channels: video.metadata.audioChannels || '2.0',
+      },
+      environment: {
+        browser: runtimeInfo.browser,
+        platform: runtimeInfo.platform,
+        userAgent: runtimeInfo.userAgent,
+      },
+      capturedAt: new Date().toISOString(),
+    };
+  }, [
+    aspectRatio,
+    colorSpace,
+    currentTime,
+    droppedFramePercent,
+    effectiveDuration,
+    estimatedSourceBitrateMbps,
+    isMuted,
+    playbackSpeed,
+    playedPercent,
+    realtimeStats.buffer,
+    realtimeStats.displayHeight,
+    realtimeStats.displayWidth,
+    realtimeStats.dropped,
+    realtimeStats.fps,
+    realtimeStats.totalFrames,
+    realtimeStats.videoHeight,
+    realtimeStats.videoWidth,
+    realtimeStats.viewportHeight,
+    realtimeStats.viewportWidth,
+    runtimeInfo.browser,
+    runtimeInfo.platform,
+    runtimeInfo.userAgent,
+    selectedAudioTrackLabel,
+    streamHealth,
+    video.id,
+    video.metadata.audioChannels,
+    video.metadata.audioCodec,
+    video.metadata.container,
+    video.metadata.hdrType,
+    video.metadata.resolution,
+    video.name,
+    video.size,
+    volume,
+  ]);
+
+  const handleCopyNerdSpecs = useCallback(async () => {
+    if (!navigator.clipboard?.writeText) {
+      setSpecsCopyState('failed');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(nerdSnapshot, null, 2));
+      setSpecsCopyState('copied');
+    } catch (err) {
+      console.error('Failed to copy nerd specs:', err);
+      setSpecsCopyState('failed');
+    }
+
+    if (copySpecsTimeoutRef.current) {
+      window.clearTimeout(copySpecsTimeoutRef.current);
+    }
+    copySpecsTimeoutRef.current = window.setTimeout(() => setSpecsCopyState('idle'), 2000);
+  }, [nerdSnapshot]);
   
   const intro = video.metadata.intro;
   const showSkipIntro = intro && currentTime >= intro.start && currentTime < intro.end;
@@ -291,6 +467,15 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
     return [...chapters].reverse().find(c => hoverTime >= c.startTime);
   }, [chapters, hoverTime]);
 
+  const currentTrackCues = useMemo(() => {
+    if (selectedSubtitleTrack === 'off') {
+      return [] as SubtitleCue[];
+    }
+
+    const selectedTrack = subtitleTracks.find((track) => track.id === selectedSubtitleTrack);
+    return selectedTrack?.cues ?? [];
+  }, [subtitleTracks, selectedSubtitleTrack]);
+
   // --- Subtitle Logic ---
   const handleSubtitleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -303,11 +488,10 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
               
               // Add new track
               const newTrackId = `upload-${Date.now()}`;
-              const newTrack: Track = { id: newTrackId, label: file.name, lang: 'Unknown' };
+              const newTrack: Track = { id: newTrackId, label: file.name, lang: 'Unknown', cues: parsed };
               
               setSubtitleTracks(prev => [...prev, newTrack]);
               setSelectedSubtitleTrack(newTrackId);
-              setActiveCues(parsed); // Set immediately active
               
               setShowSettings(true); 
           }
@@ -331,21 +515,20 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
 
   // Update current subtitle text
   useEffect(() => {
-      if (selectedSubtitleTrack === 'off' || activeCues.length === 0) {
+      if (selectedSubtitleTrack === 'off' || currentTrackCues.length === 0) {
           setCurrentSubtitle('');
           return;
       }
       const adjustedTime = currentTime - subtitleOffset;
-      const cue = activeCues.find(s => adjustedTime >= s.start && adjustedTime <= s.end);
+      const cue = currentTrackCues.find(s => adjustedTime >= s.start && adjustedTime <= s.end);
       setCurrentSubtitle(cue ? cue.text : '');
-  }, [currentTime, activeCues, selectedSubtitleTrack, subtitleOffset]);
+  }, [currentTime, currentTrackCues, selectedSubtitleTrack, subtitleOffset]);
 
 
   // --- Controls & Activity Logic ---
 
   const handleMouseMove = () => {
     setShowControls(true);
-    document.body.style.cursor = 'default';
     
     if (controlsTimeoutRef.current) {
       window.clearTimeout(controlsTimeoutRef.current);
@@ -354,7 +537,6 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
     if (isPlaying && !showChapterList && !showSettings) {
       controlsTimeoutRef.current = window.setTimeout(() => {
         setShowControls(false);
-        document.body.style.cursor = 'none';
       }, 3000);
     }
   };
@@ -377,6 +559,19 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
     } else {
       document.exitFullscreen();
       setIsFullscreen(false);
+    }
+  }, []);
+
+  const togglePip = useCallback(async () => {
+    if (!videoRef.current) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        await videoRef.current.requestPictureInPicture();
+      }
+    } catch (e) {
+      console.error('PiP error:', e);
     }
   }, []);
 
@@ -408,6 +603,18 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
       controlsTimeoutRef.current = window.setTimeout(() => setShowControls(false), 2000);
   };
+
+  useEffect(() => {
+    return () => {
+      if (controlsTimeoutRef.current) {
+        window.clearTimeout(controlsTimeoutRef.current);
+      }
+      if (copySpecsTimeoutRef.current) {
+        window.clearTimeout(copySpecsTimeoutRef.current);
+      }
+      document.body.style.cursor = '';
+    };
+  }, []);
 
   const skipIntro = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -506,14 +713,25 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
             }
             break;
         case 'p':
-             if (e.shiftKey) {
-                e.preventDefault();
-                skipPrevChapter();
-             }
-             break;
+          if (e.shiftKey) {
+            e.preventDefault();
+            skipPrevChapter();
+          } else {
+            e.preventDefault();
+            togglePip();
+          }
+          break;
+        case 'i':
+          e.preventDefault();
+          setShowStats(prev => !prev);
+          setShowChapterList(false);
+          setShowSettings(false);
+          showControlsTemp();
+          break;
         case 'escape':
           e.preventDefault();
-          if (showChapterList) setShowChapterList(false);
+          if (showStats) setShowStats(false);
+          else if (showChapterList) setShowChapterList(false);
           else if (showSettings) setShowSettings(false);
           else if (document.fullscreenElement) toggleFullscreen();
           else onBack();
@@ -523,7 +741,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, toggleFullscreen, toggleMute, changeVolume, seek, onBack, showSkipIntro, skipIntro, skipNextChapter, skipPrevChapter, showChapterList, showSettings, toggleSubtitles, selectedSubtitleTrack]);
+  }, [togglePlay, toggleFullscreen, toggleMute, changeVolume, seek, onBack, showSkipIntro, skipIntro, skipNextChapter, skipPrevChapter, showStats, showChapterList, showSettings, toggleSubtitles, selectedSubtitleTrack]);
 
   // --- Video Event Listeners ---
 
@@ -531,8 +749,29 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
     const v = videoRef.current;
     if (!v) return;
 
-    const onTimeUpdate = () => setCurrentTime(v.currentTime);
+    const emitProgress = () => {
+        if (!onProgress || !Number.isFinite(v.duration) || v.duration <= 0) {
+            return;
+        }
+
+        const now = Date.now();
+        const shouldEmit =
+            now - lastProgressEmitRef.current >= 1000 ||
+            v.currentTime === 0 ||
+            Math.abs(v.duration - v.currentTime) < 0.35;
+
+        if (shouldEmit) {
+            onProgress(v.currentTime, v.duration);
+            lastProgressEmitRef.current = now;
+        }
+    };
+
+    const onTimeUpdate = () => {
+        setCurrentTime(v.currentTime);
+        emitProgress();
+    };
     const onLoadedMetadata = () => {
+        lastProgressEmitRef.current = 0;
         setDuration(v.duration);
         v.play().then(() => setIsPlaying(true)).catch((e) => {
             if (e.name !== 'AbortError') setIsPlaying(false);
@@ -540,7 +779,12 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
     };
     const onWaiting = () => setIsBuffering(true);
     const onPlaying = () => setIsBuffering(false);
-    const onEnded = () => setIsPlaying(false);
+    const onEnded = () => {
+        setIsPlaying(false);
+        if (onProgress && Number.isFinite(v.duration) && v.duration > 0) {
+            onProgress(v.duration, v.duration);
+        }
+    };
     
     // Updated Error Handler
     const onError = () => {
@@ -587,7 +831,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
       v.removeAttribute('src');
       v.load();
     };
-  }, [video]);
+  }, [video, onProgress]);
 
 
   const handleSeekRange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -648,10 +892,12 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
       return { ...base, ...arStyle, filter };
   };
 
+  const hideCursor = isPlaying && !showControls && !showChapterList && !showSettings && !showStats && !error;
+
   return (
     <div 
       ref={containerRef}
-      className="fixed inset-0 bg-black z-[100] flex items-center justify-center overflow-hidden font-sans select-none"
+      className={`fixed inset-0 bg-black z-[100] flex items-center justify-center overflow-hidden font-sans select-none ${hideCursor ? 'cursor-none' : 'cursor-default'}`}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => isPlaying && !showChapterList && !showSettings && setShowControls(false)}
       onClick={() => { if(!showControls && !showChapterList && !showSettings) togglePlay(); }}
@@ -698,8 +944,8 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
                   style={{ 
                       fontSize: `${1.5 * subtitleSize}rem`, 
                       textShadow: '0 2px 4px rgba(0,0,0,0.8), 0 0 2px rgba(0,0,0,0.5)',
-                      color: '#ffffff',
-                      backgroundColor: 'rgba(0,0,0,0.4)',
+                      color: subtitleTextColor,
+                      backgroundColor: subtitleBackgroundColor,
                       borderRadius: '4px'
                   }}
                >
@@ -837,77 +1083,112 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
               <button 
                 onClick={() => { setShowStats(!showStats); setShowChapterList(false); setShowSettings(false); }}
                 className={`p-2.5 rounded-full transition-all duration-200 ${showStats ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white'}`}
-                title="Stats for Nerds"
+                title="Stats for Nerds (I)"
               >
                   <span className="material-icons-round text-xl">insights</span>
               </button>
           </div>
       </div>
 
-      {/* Nerd Stats Overlay (Comprehensive) */}
+      {/* Nerd Stats Overlay */}
       <div className={`
-        absolute top-28 right-6 w-96 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl p-0 text-[11px] text-white/90 z-20 shadow-2xl transition-all duration-500 ease-out font-mono overflow-hidden
-        ${showStats && showControls && !error ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'}
+        absolute top-20 right-3 sm:right-6 w-[calc(100vw-1.5rem)] max-w-[26rem] bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl p-0 text-[11px] text-white/90 z-20 shadow-2xl transition-all duration-500 ease-out font-mono overflow-hidden
+        ${showStats && !error ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'}
       `}>
-          <div className="bg-white/5 px-4 py-3 flex justify-between items-center border-b border-white/10">
-              <h3 className="font-bold uppercase tracking-widest text-xs">Stats for Nerds</h3>
-              <button onClick={() => setShowStats(false)} className="text-white/50 hover:text-white"><span className="material-icons-round text-sm">close</span></button>
+          <div className="bg-white/5 px-4 py-3 flex justify-between items-center border-b border-white/10 gap-2">
+              <div>
+                  <h3 className="font-bold uppercase tracking-widest text-xs">Stats for Nerds</h3>
+                  <p className="text-[10px] text-white/50 mt-0.5">{runtimeInfo.browser} • {runtimeInfo.platform}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCopyNerdSpecs}
+                    className="px-2 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wide border border-white/20 text-white/80 hover:text-white hover:border-white/40 transition-colors"
+                    title="Copy all specs"
+                  >
+                    {specsCopyState === 'copied' ? 'Copied' : specsCopyState === 'failed' ? 'Retry' : 'Copy'}
+                  </button>
+                  <button onClick={() => setShowStats(false)} className="text-white/50 hover:text-white"><span className="material-icons-round text-sm">close</span></button>
+              </div>
           </div>
           
-          <div className="p-4 space-y-1.5 leading-relaxed selection:bg-white/20">
-              <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Device</span>
-                  <span className="truncate">{navigator.userAgent.split(') ')[0]})</span>
+          <div className="p-4 space-y-3 leading-relaxed selection:bg-white/20">
+              <div>
+                  <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">Playback</div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Played</span>
+                      <span>{formatTime(currentTime)} / {formatTime(effectiveDuration)} ({playedPercent.toFixed(1)}%)</span>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Buffer</span>
+                      <span className={realtimeStats.buffer < 2 ? 'text-red-400' : 'text-green-400'}>{realtimeStats.buffer.toFixed(2)} s</span>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Health</span>
+                      <span>{streamHealth}</span>
+                  </div>
               </div>
-              <div className="flex group cursor-pointer" onClick={() => navigator.clipboard.writeText(video.id)}>
-                  <span className="w-24 text-white/50 shrink-0">Video ID</span>
-                  <span className="truncate font-bold text-white group-hover:underline">{video.id}</span>
-                  <span className="ml-2 text-white/30 group-hover:text-white scale-0 group-hover:scale-100 transition-all material-icons-round text-[10px]">content_copy</span>
+
+              <div className="h-px bg-white/10"></div>
+
+              <div>
+                  <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">Video</div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Source</span>
+                      <span>{realtimeStats.videoWidth}x{realtimeStats.videoHeight} @ {video.metadata.frameRate || '24'} fps</span>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Frames</span>
+                      <span>{realtimeStats.dropped} dropped / {realtimeStats.totalFrames} decoded ({droppedFramePercent.toFixed(2)}%)</span>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">FPS</span>
+                      <span>{realtimeStats.fps} fps</span>
+                  </div>
               </div>
-              <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Viewport</span>
-                  <span>{realtimeStats.viewportWidth}x{realtimeStats.viewportHeight}</span>
+
+              <div className="h-px bg-white/10"></div>
+
+              <div>
+                  <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">Display</div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Viewport</span>
+                      <span>{realtimeStats.viewportWidth}x{realtimeStats.viewportHeight}</span>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Canvas</span>
+                      <span>{realtimeStats.displayWidth}x{realtimeStats.displayHeight} / {aspectRatio}</span>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Color</span>
+                      <span>{colorSpace.toUpperCase()} / {video.metadata.hdrType || 'SDR'}</span>
+                  </div>
               </div>
-              <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Display</span>
-                  <span>{realtimeStats.displayWidth}x{realtimeStats.displayHeight} / {aspectRatio}</span>
-              </div>
-              <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Decoded</span>
-                  <span>{realtimeStats.totalFrames} frames</span>
-              </div>
-               <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Dropped</span>
-                  <span>{realtimeStats.dropped} frames</span>
-              </div>
-              <div className="border-t border-white/10 my-2 opacity-50"></div>
-              <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Current FPS</span>
-                  <span>{realtimeStats.fps} fps</span>
-              </div>
-              <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Source</span>
-                  <span>{realtimeStats.videoWidth}x{realtimeStats.videoHeight}@{video.metadata.frameRate || '24'} / {video.metadata.resolution}</span>
-              </div>
-              <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Volume</span>
-                  <span>{Math.round(volume * 100)}% (normalized)</span>
-              </div>
-              <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Audio</span>
-                  <span>{video.metadata.audioChannels || '2.0'} ch / {video.metadata.audioCodec}</span>
-              </div>
-              <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Color</span>
-                  <span>{colorSpace.toUpperCase()} / {video.metadata.hdrType || 'SDR'}</span>
-              </div>
-              <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Connection</span>
-                  <span>Local File / {formatBytes(video.size)}</span>
-              </div>
-              <div className="flex">
-                  <span className="w-24 text-white/50 shrink-0">Buffer Health</span>
-                  <span className={realtimeStats.buffer < 2 ? 'text-red-400' : 'text-green-400 font-bold'}>{realtimeStats.buffer.toFixed(2)} s</span>
+
+              <div className="h-px bg-white/10"></div>
+
+              <div>
+                  <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">Audio + Source</div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Track</span>
+                      <span className="truncate" title={selectedAudioTrackLabel}>{selectedAudioTrackLabel}</span>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Audio</span>
+                      <span>{video.metadata.audioChannels || '2.0'} ch / {video.metadata.audioCodec}</span>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Bitrate</span>
+                      <span>{estimatedSourceBitrateMbps ? `${estimatedSourceBitrateMbps.toFixed(2)} Mb/s (est)` : 'Unavailable'}</span>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">File</span>
+                      <span>{video.metadata.container} / {formatBytes(video.size)}</span>
+                  </div>
+                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
+                      <span className="text-white/50">Video ID</span>
+                      <span className="truncate" title={video.id}>{video.id}</span>
+                  </div>
               </div>
           </div>
       </div>
@@ -974,15 +1255,15 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
                     <div>
                         <span className="block text-xs font-medium text-white/80 mb-2">Color Space</span>
                         <div className="grid grid-cols-2 gap-2">
-                             {[
+                             {([
                                 { id: 'bt709', label: 'BT.709 (SDR)' },
                                 { id: 'dcip3', label: 'DCI-P3' },
                                 { id: 'bt2020', label: 'BT.2020 (HDR)' },
                                 { id: 'srgb', label: 'sRGB' },
-                             ].map((opt) => (
+                             ] as const).map((opt) => (
                                  <button
                                     key={opt.id}
-                                    onClick={() => setColorSpace(opt.id as any)}
+                                    onClick={() => setColorSpace(opt.id)}
                                     className={`
                                         flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all
                                         ${colorSpace === opt.id ? 'bg-white/10 border border-white/30 text-white' : 'hover:bg-white/5 border border-transparent text-white/60'}
@@ -1093,30 +1374,58 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
                    {/* Subtitle Adjustments */}
                    {selectedSubtitleTrack !== 'off' && (
                        <div className="bg-white/5 rounded-lg p-3 space-y-3">
-                           <div>
-                               <div className="flex justify-between text-[10px] text-white/60 mb-1.5">
-                                   <span>Size</span>
-                                   <span>{Math.round(subtitleSize * 100)}%</span>
-                               </div>
-                               <input 
-                                    type="range" min="0.5" max="2" step="0.1" 
-                                    value={subtitleSize}
-                                    onChange={(e) => setSubtitleSize(parseFloat(e.target.value))}
-                                    className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+                            <div>
+                                <div className="flex justify-between text-[10px] text-white/60 mb-1.5">
+                                    <span>Size</span>
+                                    <span>{Math.round(subtitleSize * 100)}%</span>
+                                </div>
+                                <input 
+                                     type="range" min="0.5" max="2" step="0.1" 
+                                     value={subtitleSize}
+                                     onChange={(e) => setSubtitleSize(parseFloat(e.target.value))}
+                                     className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
                                 />
-                           </div>
-                           
-                           <div>
-                               <div className="flex justify-between text-[10px] text-white/60 mb-1.5">
-                                   <span>Sync Offset</span>
-                                   <span className={subtitleOffset !== 0 ? 'text-primary' : ''}>{subtitleOffset > 0 ? '+' : ''}{subtitleOffset.toFixed(1)}s</span>
-                               </div>
-                               <div className="flex items-center space-x-2 bg-black/20 rounded p-1">
-                                    <button onClick={() => setSubtitleOffset(prev => Number((prev - 0.1).toFixed(1)))} className="p-1 hover:bg-white/10 rounded"><span className="material-icons-round text-xs text-white/80">remove</span></button>
-                                    <div className="flex-1 text-center text-[10px] font-mono">{subtitleOffset.toFixed(1)}s</div>
-                                    <button onClick={() => setSubtitleOffset(prev => Number((prev + 0.1).toFixed(1)))} className="p-1 hover:bg-white/10 rounded"><span className="material-icons-round text-xs text-white/80">add</span></button>
-                               </div>
-                           </div>
+                            </div>
+                            
+                            <div>
+                                <div className="flex justify-between text-[10px] text-white/60 mb-1.5">
+                                    <span>Sync Offset</span>
+                                    <span className={subtitleOffset !== 0 ? 'text-primary' : ''}>{subtitleOffset > 0 ? '+' : ''}{subtitleOffset.toFixed(1)}s</span>
+                                </div>
+                                <div className="flex items-center space-x-2 bg-black/20 rounded p-1">
+                                     <button onClick={() => setSubtitleOffset(prev => Number((prev - 0.1).toFixed(1)))} className="p-1 hover:bg-white/10 rounded"><span className="material-icons-round text-xs text-white/80">remove</span></button>
+                                     <div className="flex-1 text-center text-[10px] font-mono">{subtitleOffset.toFixed(1)}s</div>
+                                     <button onClick={() => setSubtitleOffset(prev => Number((prev + 0.1).toFixed(1)))} className="p-1 hover:bg-white/10 rounded"><span className="material-icons-round text-xs text-white/80">add</span></button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="text-[10px] text-white/60 mb-2">Background</div>
+                                <div className="flex gap-2">
+                                    {['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)', 'rgba(255,255,255,0.2)', 'transparent'].map((bg, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => setSubtitleBackgroundColor(bg)}
+                                            className={`w-6 h-6 rounded border ${subtitleBackgroundColor === bg ? 'border-white ring-1 ring-white/60' : 'border-white/20'}`}
+                                            style={{ background: bg }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="text-[10px] text-white/60 mb-2">Text Color</div>
+                                <div className="flex gap-2">
+                                    {['#ffffff', '#ffff00', '#00ffff', '#ff0000'].map((color, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => setSubtitleTextColor(color)}
+                                            className={`w-6 h-6 rounded border ${subtitleTextColor === color ? 'border-white ring-1 ring-white/60' : 'border-white/20'}`}
+                                            style={{ background: color }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
                        </div>
                    )}
                 </div>
@@ -1336,9 +1645,13 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack }) => {
                        <span className="material-icons-round text-2xl">settings</span>
                    </button>
                    
-                   <button className="text-white/60 hover:text-white transition-colors" title="Picture in Picture">
-                       <span className="material-icons-round text-2xl">picture_in_picture_alt</span>
-                   </button>
+                    <button 
+                        onClick={togglePip}
+                        className="text-white/60 hover:text-white transition-colors" 
+                        title="Picture in Picture"
+                    >
+                        <span className="material-icons-round text-2xl">picture_in_picture_alt</span>
+                    </button>
 
                    <button 
                         onClick={toggleFullscreen}

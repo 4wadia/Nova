@@ -1,12 +1,3 @@
-export interface QuickAccessItem {
-    id: string;
-    label: string;
-    icon: string;
-    colorClass: string;
-    iconColorClass: string;
-    isActive?: boolean;
-}
-
 export interface NavItem {
     id: string;
     label: string;
@@ -15,11 +6,12 @@ export interface NavItem {
 export interface Chapter {
     title: string;
     startTime: number;
-    endTime?: number; // Optional, can be inferred from next chapter
+    endTime?: number;
 }
 
 export interface VideoMetadata {
     duration: string;
+    durationSeconds: number;
     resolution: string;
     videoCodec: string;
     audioCodec: string;
@@ -35,10 +27,35 @@ export interface VideoMetadata {
 
 export interface VideoFile {
     id: string;
-    file: File;
+    file?: File;
     name: string;
     url: string;
     size: number;
     metadata: VideoMetadata;
-    lastPlayed?: number; // timestamp in seconds
+    lastPlayed?: number;
+    playPosition?: number;
+}
+
+export interface Playlist {
+    id: string;
+    name: string;
+    videoIds: string[];
+    createdAt: number;
+}
+
+export interface WatchHistoryEntry {
+    videoId: string;
+    videoName: string;
+    watchedAt: number;
+    duration: number;
+    position: number;
+}
+
+export interface SubtitleStyle {
+    fontFamily: string;
+    fontSize: number;
+    color: string;
+    backgroundColor: string;
+    outlineColor: string;
+    outlineWidth: number;
 }

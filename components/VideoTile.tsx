@@ -4,32 +4,38 @@ import { VideoFile } from '../types';
 interface VideoTileProps {
   video: VideoFile;
   onClick: (video: VideoFile) => void;
+  isSelected?: boolean;
 }
 
 import { BadgeDolbyVision, BadgeDolbyAtmos, BadgeHDR10Plus, BadgeDTS, BadgeDDPlus } from './FormatBadges';
 
-export const VideoTile: React.FC<VideoTileProps> = ({ video, onClick }) => {
+export const VideoTile: React.FC<VideoTileProps> = ({ video, onClick, isSelected }) => {
   const isDolbyVision = video.metadata.hdrType === 'Dolby Vision';
   const isAtmos = video.metadata.audioCodec?.includes('Atmos');
   const isDTS = video.metadata.audioCodec?.includes('DTS');
   const isDD = video.metadata.audioCodec === 'Dolby Digital';
   const wasPlayed = !!video.lastPlayed;
   const isHDR = video.metadata.hdrType && video.metadata.hdrType !== 'SDR';
+  
+  const playPosition = video.playPosition || 0;
+  const progressPercent = playPosition > 0 && video.metadata.durationSeconds > 0 
+      ? (playPosition / video.metadata.durationSeconds) * 100 
+      : 0;
 
   return (
     <div 
       onClick={() => onClick(video)}
-      className="group relative flex flex-col w-full cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1"
+      className={`group relative flex flex-col w-full cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1 ${isSelected ? 'ring-2 ring-blue-500 rounded-xl' : ''}`}
     >
       {/* Thumbnail Aspect Ratio Container */}
       <div className={`
-        relative w-full aspect-video bg-white dark:bg-surface-dark rounded-xl overflow-hidden
-        border transition-all duration-300 shadow-md group-hover:shadow-xl dark:shadow-black/40
-        ${wasPlayed ? 'border-vision-purple/50 dark:border-vision-purple/40 ring-1 ring-vision-purple/20' : 'border-zinc-200 dark:border-white/5 group-hover:border-zinc-300 dark:group-hover:border-white/20'}
+        relative w-full aspect-video bg-card dark:bg-card rounded-xl overflow-hidden
+        border transition-all duration-300 shadow-md group-hover:shadow-xl
+        ${wasPlayed ? 'border-primary/50 dark:border-primary/40 ring-1 ring-primary/20' : 'border group-hover:border'}
       `}>
         
         {/* Placeholder Gradient */}
-        <div className="absolute inset-0 bg-zinc-100 dark:bg-zinc-800/80 transition-colors group-hover:bg-zinc-200 dark:group-hover:bg-zinc-700/80"></div>
+        <div className="absolute inset-0 bg-muted dark:bg-muted/80 transition-colors group-hover:bg-muted dark:group-hover:bg-muted/80"></div>
 
         {/* Play Icon overlay */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/10 dark:bg-black/40">
@@ -37,16 +43,19 @@ export const VideoTile: React.FC<VideoTileProps> = ({ video, onClick }) => {
         </div>
 
         {/* Recently Played Indicator - Resume Bar */}
-        {wasPlayed && (
+        {(wasPlayed || progressPercent > 0) && (
            <>
              {/* Progress Bar */}
              <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20 dark:bg-black/40 backdrop-blur-sm z-10">
-                 <div className="h-full w-2/5 bg-vision-purple dark:bg-vision-purple shadow-[0_0_8px_rgba(192,132,252,0.6)] rounded-r-full"></div>
+                 <div 
+                    className="h-full bg-primary dark:bg-primary shadow-[0_0_8px_rgba(var(--primary-rgb),0.6)] rounded-r-full"
+                    style={{ width: `${progressPercent}%` }}
+                 ></div>
              </div>
              
              {/* Recently Played Icon/Badge */}
-             <div className="absolute top-2 right-2 flex items-center justify-center w-6 h-6 rounded-full bg-vision-purple/20 backdrop-blur-md border border-vision-purple/40 shadow-[0_0_10px_rgba(192,132,252,0.3)] z-20 animate-fade-in" title="Recently Played">
-                 <span className="material-icons-round text-[14px] text-vision-purple">history</span>
+             <div className="absolute top-2 right-2 flex items-center justify-center w-6 h-6 rounded-full bg-primary/20 backdrop-blur-md border border-primary/40 shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)] z-20 animate-fade-in" title="Recently Played">
+                 <span className="material-icons-round text-[14px] text-primary">history</span>
              </div>
            </>
         )}
@@ -79,16 +88,16 @@ export const VideoTile: React.FC<VideoTileProps> = ({ video, onClick }) => {
       {/* Info */}
       <div className="mt-2.5 px-0.5">
         <div className="flex items-center justify-between">
-            <h3 className={`text-sm font-medium truncate leading-tight transition-colors flex-1 ${wasPlayed ? 'text-vision-purple dark:text-vision-purple' : 'text-zinc-800 dark:text-text-main/90 group-hover:text-zinc-900 dark:group-hover:text-white'}`}>
+            <h3 className={`text-sm font-medium truncate leading-tight transition-colors flex-1 ${wasPlayed ? 'text-primary' : 'text-foreground dark:text-foreground/90 group-hover:text-foreground dark:group-hover:text-foreground'}`}>
             {video.name}
             </h3>
         </div>
         
         <div className="flex items-center space-x-2 mt-1.5 h-4">
-          <span className="text-[10px] font-medium text-zinc-500 dark:text-text-muted border border-zinc-200 dark:border-white/5 px-1 rounded uppercase group-hover:border-zinc-300 dark:group-hover:border-white/10 transition-colors">
+          <span className="text-[10px] font-medium text-muted-foreground dark:text-muted-foreground border border px-1 rounded uppercase group-hover:border transition-colors">
             {video.metadata.resolution}
           </span>
-          <span className="text-[10px] font-medium text-zinc-400 dark:text-text-muted uppercase">
+          <span className="text-[10px] font-medium text-muted-foreground dark:text-muted-foreground uppercase">
              {video.metadata.container}
           </span>
 
@@ -97,8 +106,8 @@ export const VideoTile: React.FC<VideoTileProps> = ({ video, onClick }) => {
             <span className={`
                 text-[10px] font-bold px-1 rounded uppercase border transition-colors
                 ${isDolbyVision 
-                    ? 'text-white border-white/20 bg-white/5' 
-                    : 'text-zinc-400 border-zinc-500/30 bg-zinc-500/5'
+                    ? 'text-primary-foreground border-primary/20 bg-primary/5' 
+                    : 'text-muted-foreground border-muted-foreground/30 bg-muted/5'
                 }
             `}>
                 {isDolbyVision ? 'DV' : video.metadata.hdrType}
@@ -107,15 +116,15 @@ export const VideoTile: React.FC<VideoTileProps> = ({ video, onClick }) => {
           
           {/* Audio Badge */}
           {isAtmos ? (
-            <span className="flex items-center text-[10px] font-bold px-1 py-0.5 rounded uppercase border border-zinc-200 dark:border-zinc-500/30 bg-zinc-50 dark:bg-zinc-500/5 text-zinc-400 dark:text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-white group-hover:border-zinc-300 dark:group-hover:border-white/20 transition-colors">
+            <span className="flex items-center text-[10px] font-bold px-1 py-0.5 rounded uppercase border border-muted dark:border-muted bg-muted dark:bg-muted text-muted-foreground dark:text-muted-foreground group-hover:text-foreground dark:group-hover:text-foreground group-hover:border transition-colors">
                 <BadgeDolbyAtmos className="h-2 text-[9px]" />
             </span>
           ) : isDTS ? (
-             <span className="flex items-center text-[10px] font-bold px-1 py-0.5 rounded uppercase border border-zinc-200 dark:border-zinc-500/30 bg-zinc-50 dark:bg-zinc-500/5 text-zinc-400 dark:text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-white group-hover:border-zinc-300 dark:group-hover:border-white/20 transition-colors">
+             <span className="flex items-center text-[10px] font-bold px-1 py-0.5 rounded uppercase border border-muted dark:border-muted bg-muted dark:bg-muted text-muted-foreground dark:text-muted-foreground group-hover:text-foreground dark:group-hover:text-foreground group-hover:border transition-colors">
                  <BadgeDTS className="h-2 text-[10px]" />
              </span>
           ) : isDD ? (
-             <span className="flex items-center text-[10px] font-bold px-1 py-0.5 rounded uppercase border border-zinc-200 dark:border-zinc-500/30 bg-zinc-50 dark:bg-zinc-500/5 text-zinc-400 dark:text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-white group-hover:border-zinc-300 dark:group-hover:border-white/20 transition-colors">
+             <span className="flex items-center text-[10px] font-bold px-1 py-0.5 rounded uppercase border border-muted dark:border-muted bg-muted dark:bg-muted text-muted-foreground dark:text-muted-foreground group-hover:text-foreground dark:group-hover:text-foreground group-hover:border transition-colors">
                  <BadgeDDPlus className="h-2 text-[9px]" />
              </span>
           ) : null}

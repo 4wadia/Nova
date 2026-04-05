@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavItem } from '../types';
-import { ThemeToggler } from './ThemeToggler';
+import { AnimatedThemeToggler } from './ui/animated-theme-toggler';
 
 interface NavbarProps {
     activeTab: string;
     onTabChange: (id: string) => void;
+    searchQuery?: string;
+    onSearch?: (query: string) => void;
+    showSearch?: boolean;
+    setShowSearch?: (show: boolean) => void;
 }
 
 const navItems: NavItem[] = [
@@ -13,9 +17,10 @@ const navItems: NavItem[] = [
     { id: 'history', label: 'History' },
 ];
 
-export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => {
+export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange, searchQuery = '', onSearch, showSearch = false, setShowSearch }) => {
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0, opacity: 0 });
   const tabsRef = useRef<{ [key: string]: HTMLButtonElement | null }>({});
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const currentTab = tabsRef.current[activeTab];
@@ -38,11 +43,11 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => {
           }
         `}
       </style>
-      <div className="relative bg-white/70 dark:bg-black/40 backdrop-blur-md border border-zinc-200 dark:border-white/5 p-1 rounded-full flex items-center shadow-2xl transition-colors duration-300">
+      <div className="relative bg-card/80 dark:bg-card/80 backdrop-blur-md border border dark:border p-1 rounded-full flex items-center shadow-2xl transition-colors duration-300">
         
         {/* Sliding Active Indicator */}
         <div
-            className="absolute top-1 bottom-1 rounded-full bg-zinc-900/5 dark:bg-white/10 border border-black/5 dark:border-white/5 transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
+            className="absolute top-1 bottom-1 rounded-full bg-primary/10 dark:bg-primary/10 border border-transparent dark:border-transparent transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
             style={{ 
                 left: indicatorStyle.left, 
                 width: indicatorStyle.width,
@@ -58,25 +63,59 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => {
             className={`
               relative z-10 px-6 py-2 rounded-full text-sm font-medium transition-colors duration-300
               ${activeTab === item.id 
-                ? 'text-black dark:text-white' 
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'}
+                ? 'text-foreground dark:text-foreground' 
+                : 'text-muted-foreground hover:text-foreground dark:hover:text-foreground'}
             `}
           >
             {item.label}
           </button>
         ))}
 
-        <div className="w-px h-4 bg-zinc-300 dark:bg-white/5 mx-2 relative z-10 transition-colors"></div>
+        <div className="w-px h-4 bg-muted dark:bg-muted mx-2 relative z-10 transition-colors"></div>
 
-        <button className="relative z-10 p-2.5 rounded-full text-zinc-500 hover:text-gray-900 dark:hover:text-white transition-colors duration-200">
-          <span className="material-icons-round text-lg">search</span>
-        </button>
+        {onSearch && setShowSearch && (
+            <div id="search-container" className="relative z-10 flex items-center">
+                <div 
+                    className="flex items-center overflow-hidden transition-all duration-300 ease-out"
+                    style={{ 
+                        width: showSearch ? '200px' : '0px',
+                        opacity: showSearch ? 1 : 0,
+                    }}
+                >
+                    <input
+                        ref={searchInputRef}
+                        type="text"
+                        placeholder="Search library..."
+                        value={searchQuery}
+                        onChange={(e) => onSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                                onSearch('');
+                                setShowSearch(false);
+                            }
+                        }}
+                        autoFocus={showSearch}
+                        className="w-full px-3 py-1.5 text-sm bg-muted dark:bg-muted border border rounded-full focus:outline-none text-foreground dark:text-foreground placeholder-muted-foreground"
+                    />
+                </div>
+                <button 
+                    className="p-2.5 rounded-full text-muted-foreground hover:text-foreground dark:hover:text-foreground transition-colors duration-200"
+                    onClick={() => {
+                        if (showSearch && searchQuery) {
+                            onSearch('');
+                        }
+                        setShowSearch(!showSearch);
+                    }}
+                    aria-label={showSearch ? "Close search" : "Search library"}
+                >
+                    <span className="material-icons-round text-lg">
+                        {showSearch ? 'close' : 'search'}
+                    </span>
+                </button>
+            </div>
+        )}
         
-        <ThemeToggler />
-
-        <button className="relative z-10 p-2.5 rounded-full text-zinc-500 hover:text-gray-900 dark:hover:text-white transition-colors duration-200">
-          <span className="material-icons-round text-lg">settings</span>
-        </button>
+        <AnimatedThemeToggler />
       </div>
     </nav>
   );
