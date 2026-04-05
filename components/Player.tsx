@@ -432,6 +432,13 @@ export const Player: React.FC<PlayerProps> = ({
   }, [audioTracks, selectedAudioTrack]);
 
   const effectiveDuration = duration > 0 ? duration : video.metadata.durationSeconds;
+  const progressDuration = effectiveDuration > 0 ? effectiveDuration : 0;
+  const clampedCurrentTime = progressDuration > 0
+    ? Math.max(0, Math.min(currentTime, progressDuration))
+    : 0;
+  const playedRatio = progressDuration > 0 ? clampedCurrentTime / progressDuration : 0;
+  const bufferedRatio = progressDuration > 0 ? Math.min(1, playedRatio + 0.15) : 0;
+  const remainingTime = progressDuration > 0 ? Math.max(0, progressDuration - clampedCurrentTime) : 0;
   const playedPercent = useMemo(() => {
     if (!effectiveDuration || effectiveDuration <= 0) {
       return 0;
@@ -602,9 +609,9 @@ export const Player: React.FC<PlayerProps> = ({
   const showSkipIntro = intro && currentTime >= intro.start && currentTime < intro.end;
 
   const chapters = useMemo(() => {
-    if (!video.metadata.chapters || duration === 0) return [];
-    return video.metadata.chapters.filter(c => c.startTime < duration).sort((a, b) => a.startTime - b.startTime);
-  }, [video.metadata.chapters, duration]);
+    if (!video.metadata.chapters || progressDuration <= 0) return [];
+    return video.metadata.chapters.filter(c => c.startTime < progressDuration).sort((a, b) => a.startTime - b.startTime);
+  }, [progressDuration, video.metadata.chapters]);
 
   const currentChapter = useMemo(() => {
     if (chapters.length === 0) return null;
@@ -921,7 +928,10 @@ export const Player: React.FC<PlayerProps> = ({
     };
     const onLoadedMetadata = () => {
         lastProgressEmitRef.current = 0;
-        setDuration(v.duration);
+        const mediaDuration = Number.isFinite(v.duration) && v.duration > 0
+          ? v.duration
+          : video.metadata.durationSeconds;
+        setDuration(mediaDuration > 0 ? mediaDuration : 0);
         v.play().then(() => setIsPlaying(true)).catch((e) => {
             if (e.name !== 'AbortError') setIsPlaying(false);
         });
@@ -984,18 +994,28 @@ export const Player: React.FC<PlayerProps> = ({
 
 
   const handleSeekRange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (progressDuration <= 0) {
+      return;
+    }
+
     const time = Number(e.target.value);
+    const clamped = Math.max(0, Math.min(time, progressDuration));
     if (videoRef.current) {
-      videoRef.current.currentTime = time;
-      setCurrentTime(time);
+      videoRef.current.currentTime = clamped;
+      setCurrentTime(clamped);
     }
   };
 
   const handleSeekBarMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!duration) return;
+    if (progressDuration <= 0) {
+      setIsHoveringSeekBar(false);
+      setHoverTime(null);
+      return;
+    }
+
     const rect = e.currentTarget.getBoundingClientRect();
     const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    setHoverTime(percent * duration);
+    setHoverTime(percent * progressDuration);
     setIsHoveringSeekBar(true);
   };
 
@@ -1266,54 +1286,64 @@ export const Player: React.FC<PlayerProps> = ({
       </div>
 
       {/* Top Bar (Title & Back) */}
-      <div className={`
-        absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-background/95 via-background/70 to-transparent border-b border-border/50
-        flex items-start justify-between p-6 transition-all duration-500 ease-out z-20
-        ${(showControls && !error) ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'}
-      `}>
-          <div className="flex items-center space-x-6">
-              <button 
-                onClick={onBack}
-                className="group p-2 rounded-full bg-card/90 hover:bg-accent border border-border backdrop-blur-md transition-all duration-200 hover:scale-110 text-muted-foreground hover:text-accent-foreground"
-              >
-                  <span className="material-icons-round text-xl">arrow_back</span>
-              </button>
-              <div>
-                  <h1 className="text-foreground font-medium text-lg tracking-wide drop-shadow-md flex items-center">
-                    {video.name}
-                    {wasPlayed && (
-                        <span className="ml-3 px-2 py-0.5 rounded bg-primary/20 border border-primary/35 text-[9px] font-bold text-primary tracking-wider uppercase">
-                            Resumed
-                        </span>
-                    )}
-                  </h1>
-                  <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-0.5">
-                      <span className="uppercase tracking-wider font-bold">{video.metadata.resolution}</span>
-                      <span>•</span>
-                      <span>{video.metadata.duration}</span>
+      <div
+        className={`
+          absolute top-0 left-0 right-0 px-2 sm:px-4 transition-all duration-500 ease-out z-20
+          ${(showControls && !error) ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'}
+        `}
+        style={{ paddingTop: 'calc(0.4rem + env(safe-area-inset-top))' }}
+      >
+          <div className="mx-auto w-full max-w-6xl">
+              <div className="rounded-full border border-border/70 bg-popover/85 backdrop-blur-2xl">
+                  <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2 sm:py-2.5">
+                      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                          <button
+                            onClick={onBack}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background/70 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                            title="Back to Library"
+                          >
+                              <span className="material-icons-round text-xl">arrow_back</span>
+                          </button>
+
+                          <div className="min-w-0">
+                              <h1 className="text-foreground font-medium text-sm sm:text-base tracking-wide flex items-center gap-2 min-w-0">
+                                <span className="truncate">{video.name}</span>
+                                {wasPlayed && (
+                                    <span className="shrink-0 px-2 py-0.5 rounded-full bg-primary/20 border border-primary/35 text-[9px] font-bold text-primary tracking-wider uppercase">
+                                        Resumed
+                                    </span>
+                                )}
+                              </h1>
+                              <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+                                  <span className="uppercase tracking-wider font-bold">{video.metadata.resolution}</span>
+                                  <span>•</span>
+                                  <span>{video.metadata.duration}</span>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                          {/* Chapter List Toggle */}
+                          {chapters.length > 0 && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setShowChapterList(!showChapterList); setShowStats(false); setShowSettings(false); }}
+                                className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${showChapterList ? 'bg-primary text-primary-foreground border-primary/60' : 'bg-background/70 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
+                                title="Chapters"
+                              >
+                                  <span className="material-icons-round text-xl">format_list_bulleted</span>
+                              </button>
+                          )}
+
+                          <button
+                            onClick={() => { setShowStats(!showStats); setShowChapterList(false); setShowSettings(false); }}
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${showStats ? 'bg-primary text-primary-foreground border-primary/60' : 'bg-background/70 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
+                            title="Stats for Nerds (I)"
+                          >
+                              <span className="material-icons-round text-xl">insights</span>
+                          </button>
+                      </div>
                   </div>
               </div>
-          </div>
-
-          <div className="flex items-center space-x-3">
-              {/* Chapter List Toggle */}
-              {chapters.length > 0 && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setShowChapterList(!showChapterList); setShowStats(false); setShowSettings(false); }}
-                    className={`p-2.5 rounded-full transition-all duration-200 border ${showChapterList ? 'bg-primary text-primary-foreground border-primary/60 shadow-lg' : 'bg-card/90 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
-                    title="Chapters"
-                  >
-                      <span className="material-icons-round text-xl">format_list_bulleted</span>
-                  </button>
-              )}
-              
-              <button 
-                onClick={() => { setShowStats(!showStats); setShowChapterList(false); setShowSettings(false); }}
-                className={`p-2.5 rounded-full transition-all duration-200 border ${showStats ? 'bg-primary text-primary-foreground border-primary/60 shadow-lg' : 'bg-card/90 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
-                title="Stats for Nerds (I)"
-              >
-                  <span className="material-icons-round text-xl">insights</span>
-              </button>
           </div>
       </div>
 
@@ -1409,7 +1439,7 @@ export const Player: React.FC<PlayerProps> = ({
       
       {/* Settings Menu Overlay */}
       <div className={`
-        absolute bottom-28 right-8 w-80 bg-popover/95 backdrop-blur-2xl border border-border rounded-2xl p-0 text-foreground z-30 shadow-2xl transition-all duration-300 ease-out origin-bottom-right overflow-hidden
+        absolute right-2 sm:right-8 bottom-[calc(env(safe-area-inset-bottom)+7rem)] sm:bottom-[calc(env(safe-area-inset-bottom)+8rem)] w-[calc(100vw-1rem)] sm:w-80 max-w-[20rem] bg-popover/95 backdrop-blur-2xl border border-border rounded-2xl p-0 text-foreground z-30 shadow-2xl transition-all duration-300 ease-out origin-bottom-right overflow-hidden
         ${showSettings && showControls && !error ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}
       `}>
            <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/40">
@@ -1647,235 +1677,257 @@ export const Player: React.FC<PlayerProps> = ({
       </div>
 
       {/* Bottom Controls */}
-      <div className={`
-        absolute bottom-0 left-0 right-0 pb-8 pt-20 px-8 bg-gradient-to-t from-background/95 via-background/70 to-transparent border-t border-border/50
-        flex flex-col space-y-4 transition-all duration-500 ease-out z-20
-        ${(showControls && !error) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}
-      `}>
-          
-          {/* Chapter Title Indicator */}
-          <div className="flex items-center justify-between h-6 mb-1">
-             {currentChapter ? (
-                 <span className="text-sm font-medium text-foreground drop-shadow-md animate-fade-in">
-                     {currentChapter.title}
-                     <span className="text-muted-foreground mx-2">•</span>
-                     <span className="text-muted-foreground text-xs">Chapter {chapters.indexOf(currentChapter) + 1} of {chapters.length}</span>
-                 </span>
-             ) : <div></div>}
-          </div>
+      <div
+        className={`
+          absolute bottom-0 left-0 right-0 px-2 sm:px-4 transition-all duration-500 ease-out z-20
+          ${(showControls && !error) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}
+        `}
+        style={{ paddingBottom: 'calc(0.4rem + env(safe-area-inset-bottom))' }}
+      >
+          <div className="mx-auto w-full max-w-6xl">
+              {currentChapter && (
+                  <div className="mb-2 px-2 sm:px-4 text-xs sm:text-sm text-foreground/90 drop-shadow-md">
+                      <span className="font-medium">{currentChapter.title}</span>
+                      <span className="text-muted-foreground mx-2">•</span>
+                      <span className="text-muted-foreground">Chapter {chapters.indexOf(currentChapter) + 1} of {chapters.length}</span>
+                  </div>
+              )}
 
-          {/* Progress Bar (Interactive) */}
-          <div 
-            className="relative group w-full h-1 hover:h-1.5 transition-all duration-200 cursor-pointer flex items-center"
-            onMouseMove={handleSeekBarMouseMove}
-            onMouseLeave={handleSeekBarMouseLeave}
-          >
-             {/* Background Track */}
-             <div className="absolute inset-0 bg-muted/80 rounded-full"></div>
-
-             {/* Chapter Markers (Gaps) */}
-             {chapters.map((chapter, i) => {
-                 if (i === 0) return null; // Skip start marker
-                 const left = (chapter.startTime / duration) * 100;
-                 return (
-                     <div 
-                        key={i} 
-                        className="absolute top-0 bottom-0 w-0.5 bg-border z-20 pointer-events-none"
-                        style={{ left: `${left}%` }}
-                     />
-                 )
-              })}
-             
-             {/* Buffered (Mock) */}
-             <div 
-                className="absolute left-0 top-0 bottom-0 bg-accent/70 rounded-full" 
-                style={{ width: `${(currentTime/duration) * 100 + 15}%`, maxWidth: '100%' }}
-             />
-
-             {/* Hover Ghost Track */}
-             {isHoveringSeekBar && hoverTime !== null && (
-                <div 
-                    className="absolute left-0 top-0 bottom-0 bg-accent rounded-full pointer-events-none transition-all duration-75 ease-out"
-                    style={{ width: `${(hoverTime / duration) * 100}%` }}
-                />
-             )}
-
-             {/* Played Track */}
-             <div 
-                className="absolute left-0 top-0 bottom-0 bg-primary rounded-full transition-all duration-100"
-                style={{ width: `${(currentTime / duration) * 100}%` }}
-             >
-                {/* Thumb Scrubber (Visible on Hover) */}
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-primary-foreground rounded-full scale-0 group-hover:scale-100 transition-transform shadow-lg ring-2 ring-primary/35"></div>
-             </div>
-
-             {/* Seek Bar Hover Tooltip */}
-             {isHoveringSeekBar && hoverTime !== null && (
-                 <div 
-                    className="absolute bottom-4 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30"
-                    style={{ left: `${(hoverTime / duration) * 100}%` }}
-                 >
-                     <div className="bg-popover/95 backdrop-blur border border-border px-2 py-1 rounded text-[10px] font-medium text-foreground whitespace-nowrap shadow-xl mb-1">
-                         {hoverChapter ? (
-                             <>
-                                <span className="text-muted-foreground mr-1.5">{hoverChapter.title}</span>
-                                <span className="font-mono text-foreground">{formatTime(hoverTime)}</span>
-                             </>
-                         ) : (
-                             <span className="font-mono">{formatTime(hoverTime)}</span>
-                         )}
-                     </div>
-                 </div>
-             )}
-
-             <input
-                type="range"
-                min="0"
-                max={duration || 100}
-                value={currentTime}
-                onChange={handleSeekRange}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-             />
-          </div>
-
-          <div className="flex items-center justify-between">
-              {/* Left: Controls & Time */}
-              <div className="flex items-center space-x-4">
-                  
-                  {/* Skip Previous Chapter */}
-                  {chapters.length > 0 && (
-                      <button 
-                        onClick={skipPrevChapter}
-                        className="text-muted-foreground hover:text-foreground transition-colors"
-                        title="Previous Chapter"
-                      >
-                          <span className="material-icons-round text-2xl">skip_previous</span>
-                      </button>
-                  )}
-
-                  {/* Play / Pause */}
-                  <button 
-                    onClick={togglePlay}
-                    className="text-foreground hover:text-foreground/80 transition-transform active:scale-95"
-                  >
-                      <span className="material-icons-round text-4xl">
-                          {isPlaying ? 'pause' : 'play_arrow'}
-                      </span>
-                  </button>
-
-                  {/* Skip Next Chapter */}
-                  {chapters.length > 0 && (
-                      <button 
-                        onClick={skipNextChapter}
-                        className="text-muted-foreground hover:text-foreground transition-colors"
-                        title="Next Chapter"
-                      >
-                          <span className="material-icons-round text-2xl">skip_next</span>
-                      </button>
-                  )}
-
-                  {/* Volume Group */}
-                  <div className="group flex items-center space-x-2 ml-2">
-                      <button onClick={toggleMute} className="text-muted-foreground hover:text-foreground">
-                          <span className="material-icons-round text-2xl">
-                              {isMuted || volume === 0 ? 'volume_off' : volume < 0.5 ? 'volume_down' : 'volume_up'}
+              <div className="rounded-full border border-border/70 bg-popover/85 backdrop-blur-2xl">
+                  <div className="px-4 sm:px-6 py-2 sm:py-2.5 space-y-2">
+                      {/* Time + Progress */}
+                      <div className="flex items-center gap-2 sm:gap-3">
+                          <span className="text-[11px] sm:text-xs font-mono text-foreground/95 tabular-nums min-w-[2.8rem] text-right">
+                              {formatTime(clampedCurrentTime)}
                           </span>
-                      </button>
-                      
-                      {/* Volume Slider (Expands on hover) */}
-                      <div className="w-0 overflow-hidden group-hover:w-24 transition-all duration-300 flex items-center">
-                          <input 
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            value={volume}
-                            onChange={handleVolumeRange}
-                            className="w-20 h-1 bg-muted rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full"
-                          />
-                      </div>
-                  </div>
 
-                  {/* Time Display */}
-                  <div className="text-sm font-medium font-mono text-foreground ml-2">
-                      <span>{formatTime(currentTime)}</span>
-                      <span className="mx-2 text-muted-foreground">/</span>
-                      <span className="text-muted-foreground">{formatTime(duration)}</span>
-                  </div>
-              </div>
+                          <div
+                            className={`relative group flex-1 h-2 sm:h-2.5 rounded-full ${progressDuration > 0 ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}
+                            onMouseMove={handleSeekBarMouseMove}
+                            onMouseLeave={handleSeekBarMouseLeave}
+                          >
+                             <div className="absolute inset-0 bg-muted/80 rounded-full"></div>
 
-              {/* Right: Actions */}
-              <div className="flex items-center space-x-5">
-                   
-                   {/* Format Badges */}
-                   <div className="flex items-center space-x-3 mr-2 border-r border-border pr-4 h-6">
-                        {isHDR && (
-                            <div className={`
-                                flex items-center px-2 py-0.5 rounded border select-none
-                                ${isDolbyVision 
-                                    ? 'bg-primary/15 border-primary/35 text-foreground' 
-                                    : 'bg-background/70 border-border text-muted-foreground'
+                             {chapters.map((chapter, i) => {
+                                if (i === 0 || progressDuration <= 0) {
+                                  return null;
                                 }
-                            `}>
-                                {isDolbyVision ? (
-                                    <BadgeDolbyVision className="h-2.5 text-[10px]" />
-                                ) : video.metadata.hdrType === 'HDR10+' ? (
-                                    <BadgeHDR10Plus className="h-2.5 text-[10px]" />
-                                ) : (
-                                    <span className="text-[10px] font-bold tracking-wider leading-none">HDR</span>
-                                )}
-                            </div>
-                        )}
 
-                        {isAtmos ? (
-                            <div className="flex items-center px-2 py-0.5 rounded border border-primary/35 bg-primary/15 text-foreground select-none">
-                                <BadgeDolbyAtmos className="h-2.5 text-[10px]" />
-                            </div>
-                        ) : isDTS ? (
-                            <div className="flex items-center px-2 py-0.5 rounded border border-border bg-background/70 text-muted-foreground select-none">
-                                <BadgeDTS className="h-2.5 text-[12px]" />
-                            </div>
-                        ) : isDD ? (
-                           <div className="flex items-center px-2 py-0.5 rounded border border-border bg-background/70 text-muted-foreground select-none">
-                               <BadgeDDPlus className="h-2.5 text-[10px]" />
-                           </div>
-                        ) : null}
-                   </div>
+                                const left = (chapter.startTime / progressDuration) * 100;
+                                return (
+                                  <div
+                                    key={i}
+                                    className="absolute top-0 bottom-0 w-0.5 bg-border z-20 pointer-events-none"
+                                    style={{ left: `${left}%` }}
+                                  />
+                                );
+                              })}
 
-                   {/* CC Button */}
-                   <button 
-                        onClick={toggleSubtitles}
-                        className={`text-2xl transition-colors ${selectedSubtitleTrack !== 'off' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                        title={subtitleTracks.length > 0 ? (selectedSubtitleTrack !== 'off' ? "Disable Subtitles" : "Enable Subtitles") : "Upload Subtitles"}
-                   >
-                       <span className="material-icons-round">{selectedSubtitleTrack !== 'off' ? 'closed_caption' : 'closed_caption_disabled'}</span>
-                   </button>
+                             <div
+                                className="absolute left-0 top-0 bottom-0 bg-accent/70 rounded-full"
+                                style={{ width: `${bufferedRatio * 100}%` }}
+                             />
 
-                   <button 
-                        onClick={() => { setShowSettings(!showSettings); setShowStats(false); setShowChapterList(false); }}
-                        className={`transition-colors ${showSettings ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`} 
-                        title="Settings"
-                   >
-                       <span className="material-icons-round text-2xl">settings</span>
-                   </button>
-                   
-                    <button 
-                        onClick={togglePip}
-                        className="text-muted-foreground hover:text-foreground transition-colors" 
-                        title="Picture in Picture"
-                    >
-                        <span className="material-icons-round text-2xl">picture_in_picture_alt</span>
-                    </button>
+                             {isHoveringSeekBar && hoverTime !== null && progressDuration > 0 && (
+                                <div
+                                    className="absolute left-0 top-0 bottom-0 bg-accent rounded-full pointer-events-none transition-all duration-75 ease-out"
+                                    style={{ width: `${Math.max(0, Math.min(100, (hoverTime / progressDuration) * 100))}%` }}
+                                />
+                             )}
 
-                   <button 
-                        onClick={toggleFullscreen}
-                        className="text-foreground hover:text-foreground/80 transition-transform active:scale-90" 
-                        title="Fullscreen"
-                    >
-                       <span className="material-icons-round text-3xl">
-                           {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
-                       </span>
-                   </button>
+                             <div
+                                className="absolute left-0 top-0 bottom-0 bg-primary rounded-full transition-all duration-100"
+                                style={{ width: `${playedRatio * 100}%` }}
+                             >
+                                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-primary-foreground rounded-full scale-100 sm:scale-0 sm:group-hover:scale-100 transition-transform shadow-lg ring-2 ring-primary/35"></div>
+                             </div>
+
+                             {isHoveringSeekBar && hoverTime !== null && progressDuration > 0 && (
+                                 <div
+                                    className="absolute bottom-5 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30"
+                                    style={{ left: `${Math.max(0, Math.min(100, (hoverTime / progressDuration) * 100))}%` }}
+                                 >
+                                     <div className="bg-popover/95 backdrop-blur border border-border px-2 py-1 rounded text-[10px] font-medium text-foreground whitespace-nowrap shadow-xl mb-1">
+                                         {hoverChapter ? (
+                                             <>
+                                                <span className="text-muted-foreground mr-1.5">{hoverChapter.title}</span>
+                                                <span className="font-mono text-foreground">{formatTime(hoverTime)}</span>
+                                             </>
+                                         ) : (
+                                             <span className="font-mono">{formatTime(hoverTime)}</span>
+                                         )}
+                                     </div>
+                                 </div>
+                             )}
+
+                             <input
+                                type="range"
+                                min="0"
+                                max={progressDuration || 100}
+                                value={clampedCurrentTime}
+                                onChange={handleSeekRange}
+                                disabled={progressDuration <= 0}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                             />
+                          </div>
+
+                          <span className="text-[11px] sm:text-xs font-mono text-muted-foreground tabular-nums min-w-[2.8rem]">
+                              {formatTime(progressDuration)}
+                          </span>
+
+                          <span className="hidden sm:inline text-[11px] font-mono text-muted-foreground/90 tabular-nums min-w-[3.2rem] text-right">
+                              -{formatTime(remainingTime)}
+                          </span>
+                      </div>
+
+                      {/* Controls + Selectors */}
+                      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2">
+                          <div className="flex items-center flex-wrap gap-1.5 sm:gap-2">
+                              {chapters.length > 0 && (
+                                  <button
+                                    onClick={skipPrevChapter}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background/70 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                    title="Previous Chapter"
+                                  >
+                                      <span className="material-icons-round text-xl">skip_previous</span>
+                                  </button>
+                              )}
+
+                              <button
+                                onClick={togglePlay}
+                                className="inline-flex h-10 w-10 items-center justify-center sm:h-11 sm:w-11 rounded-full bg-primary text-primary-foreground hover:opacity-90 transition-all active:scale-95"
+                                title={isPlaying ? 'Pause' : 'Play'}
+                              >
+                                  <span className="material-icons-round text-[30px] leading-none">{isPlaying ? 'pause' : 'play_arrow'}</span>
+                              </button>
+
+                              {chapters.length > 0 && (
+                                  <button
+                                    onClick={skipNextChapter}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background/70 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                    title="Next Chapter"
+                                  >
+                                      <span className="material-icons-round text-xl">skip_next</span>
+                                  </button>
+                              )}
+
+                              <div className="flex items-center gap-2 ml-1 sm:ml-2 rounded-full border border-border bg-background/60 px-2 py-1">
+                                  <button onClick={toggleMute} className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/80 transition-colors" title={isMuted ? 'Unmute' : 'Mute'}>
+                                      <span className="material-icons-round text-xl">
+                                          {isMuted || volume === 0 ? 'volume_off' : volume < 0.5 ? 'volume_down' : 'volume_up'}
+                                      </span>
+                                  </button>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
+                                    step="0.05"
+                                    value={volume}
+                                    onChange={handleVolumeRange}
+                                    className="w-20 sm:w-24 h-1.5 bg-muted rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full"
+                                  />
+                              </div>
+                          </div>
+
+                          <div className="flex items-center flex-wrap gap-2 xl:justify-end">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                  <label className="text-[10px] sm:text-xs text-muted-foreground">Audio</label>
+                                  <select
+                                    value={selectedAudioTrack}
+                                    onChange={(e) => setSelectedAudioTrack(e.target.value)}
+                                    className="h-8 min-w-[8.5rem] max-w-[12rem] rounded-full border border-border bg-background/70 px-3 text-[11px] sm:text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/40"
+                                  >
+                                    {audioTracks.length === 0 && <option value="">No tracks</option>}
+                                    {audioTracks.map((track) => (
+                                      <option key={track.id} value={track.id}>{track.label}</option>
+                                    ))}
+                                  </select>
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-wrap">
+                                  <label className="text-[10px] sm:text-xs text-muted-foreground">Subtitles</label>
+                                  <select
+                                    value={selectedSubtitleTrack}
+                                    onChange={(e) => setSelectedSubtitleTrack(e.target.value)}
+                                    className="h-8 min-w-[8.5rem] max-w-[12rem] rounded-full border border-border bg-background/70 px-3 text-[11px] sm:text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/40"
+                                  >
+                                    <option value="off">Off</option>
+                                    {subtitleTracks.map((track) => (
+                                      <option key={track.id} value={track.id}>{track.label}</option>
+                                    ))}
+                                  </select>
+                              </div>
+
+                              <button
+                                   onClick={toggleSubtitles}
+                                   className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${selectedSubtitleTrack !== 'off' ? 'border-primary/50 bg-primary/15 text-foreground' : 'border-border bg-background/70 text-muted-foreground hover:text-foreground hover:bg-accent'}`}
+                                   title={subtitleTracks.length > 0 ? (selectedSubtitleTrack !== 'off' ? 'Disable Subtitles' : 'Enable Subtitles') : 'Upload Subtitles'}
+                              >
+                                  <span className="material-icons-round text-xl">{selectedSubtitleTrack !== 'off' ? 'closed_caption' : 'closed_caption_disabled'}</span>
+                              </button>
+
+                              <button
+                                   onClick={() => { setShowSettings(!showSettings); setShowStats(false); setShowChapterList(false); }}
+                                   className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${showSettings ? 'border-primary/50 bg-primary/15 text-foreground' : 'border-border bg-background/70 text-muted-foreground hover:text-foreground hover:bg-accent'}`}
+                                   title="Settings"
+                              >
+                                  <span className="material-icons-round text-xl">settings</span>
+                              </button>
+
+                              <button
+                                  onClick={togglePip}
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background/70 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                  title="Picture in Picture"
+                              >
+                                  <span className="material-icons-round text-xl">picture_in_picture_alt</span>
+                              </button>
+
+                              <button
+                                  onClick={toggleFullscreen}
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background/70 text-foreground hover:bg-accent transition-colors"
+                                  title="Fullscreen"
+                              >
+                                  <span className="material-icons-round text-xl">{isFullscreen ? 'fullscreen_exit' : 'fullscreen'}</span>
+                              </button>
+                          </div>
+                      </div>
+
+                      {(isHDR || isAtmos || isDTS || isDD) && (
+                        <div className="hidden sm:flex items-center gap-2 pt-0.5">
+                            {isHDR && (
+                                <div className={`
+                                    flex items-center px-2 py-0.5 rounded border select-none
+                                    ${isDolbyVision
+                                      ? 'bg-primary/15 border-primary/35 text-foreground'
+                                      : 'bg-background/70 border-border text-muted-foreground'
+                                    }
+                                `}>
+                                    {isDolbyVision ? (
+                                        <BadgeDolbyVision className="h-2.5 text-[10px]" />
+                                    ) : video.metadata.hdrType === 'HDR10+' ? (
+                                        <BadgeHDR10Plus className="h-2.5 text-[10px]" />
+                                    ) : (
+                                        <span className="text-[10px] font-bold tracking-wider leading-none">HDR</span>
+                                    )}
+                                </div>
+                            )}
+
+                            {isAtmos ? (
+                                <div className="flex items-center px-2 py-0.5 rounded border border-primary/35 bg-primary/15 text-foreground select-none">
+                                    <BadgeDolbyAtmos className="h-2.5 text-[10px]" />
+                                </div>
+                            ) : isDTS ? (
+                                <div className="flex items-center px-2 py-0.5 rounded border border-border bg-background/70 text-muted-foreground select-none">
+                                    <BadgeDTS className="h-2.5 text-[12px]" />
+                                </div>
+                            ) : isDD ? (
+                               <div className="flex items-center px-2 py-0.5 rounded border border-border bg-background/70 text-muted-foreground select-none">
+                                   <BadgeDDPlus className="h-2.5 text-[10px]" />
+                               </div>
+                            ) : null}
+                        </div>
+                      )}
+                  </div>
               </div>
           </div>
       </div>
