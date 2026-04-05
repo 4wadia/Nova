@@ -897,7 +897,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
   return (
     <div 
       ref={containerRef}
-      className={`fixed inset-0 bg-black z-[100] flex items-center justify-center overflow-hidden font-sans select-none ${hideCursor ? 'cursor-none' : 'cursor-default'}`}
+      className={`fixed inset-0 bg-card z-[100] flex items-center justify-center overflow-hidden font-sans select-none ${hideCursor ? 'cursor-none' : 'cursor-default'}`}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => isPlaying && !showChapterList && !showSettings && setShowControls(false)}
       onClick={() => { if(!showControls && !showChapterList && !showSettings) togglePlay(); }}
@@ -911,18 +911,18 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
       
       {/* Error Overlay */}
       {error && (
-        <div className="absolute inset-0 z-[60] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center text-center p-8 animate-fade-in">
+        <div className="absolute inset-0 z-[60] bg-background/95 backdrop-blur-sm flex flex-col items-center justify-center text-center p-8 animate-fade-in border-t border-border">
            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
-               <span className="material-icons-round text-4xl text-red-500">error_outline</span>
-           </div>
-           <h2 className="text-2xl font-bold text-white mb-3">Playback Error</h2>
-           <p className="text-zinc-400 max-w-md mb-8 leading-relaxed">{error}</p>
+                <span className="material-icons-round text-4xl text-red-500">error_outline</span>
+            </div>
+           <h2 className="text-2xl font-bold text-foreground mb-3">Playback Error</h2>
+           <p className="text-muted-foreground max-w-md mb-8 leading-relaxed">{error}</p>
            <button 
              onClick={onBack}
-             className="px-8 py-3 bg-white text-black rounded-full font-medium hover:bg-zinc-200 transition-colors flex items-center shadow-lg shadow-white/5"
+             className="px-8 py-3 bg-primary text-primary-foreground rounded-full font-medium hover:opacity-90 transition-colors flex items-center shadow-lg"
            >
-               <span className="material-icons-round mr-2">arrow_back</span>
-               Back to Library
+                <span className="material-icons-round mr-2">arrow_back</span>
+                Back to Library
            </button>
         </div>
       )}
@@ -957,7 +957,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
       {/* Buffering Indicator */}
       {isBuffering && !error && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-              <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+              <div className="w-16 h-16 border-4 border-muted/50 border-t-primary rounded-full animate-spin"></div>
           </div>
       )}
 
@@ -969,7 +969,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
       `}>
           <button
               onClick={skipIntro}
-              className="group flex items-center space-x-2 bg-black/60 hover:bg-white/20 backdrop-blur-md border border-white/20 hover:border-white/40 px-5 py-2.5 rounded-lg text-white font-medium transition-all duration-300 shadow-lg hover:shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95"
+              className="group flex items-center space-x-2 bg-popover/90 hover:bg-accent/90 backdrop-blur-md border border-border px-5 py-2.5 rounded-lg text-foreground font-medium transition-all duration-300 shadow-lg active:scale-95"
           >
               <span className="text-sm tracking-wide uppercase font-bold drop-shadow-md">Skip Intro</span>
               <span className="material-icons-round text-lg group-hover:translate-x-1 transition-transform">skip_next</span>
@@ -979,15 +979,15 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
 
        {/* Chapter List Sidebar */}
        <div className={`
-          absolute top-0 right-0 bottom-0 w-80 bg-black/95 backdrop-blur-2xl border-l border-white/10 z-40 p-6 
+          absolute top-0 right-0 bottom-0 w-80 bg-popover/95 backdrop-blur-2xl border-l border-border z-40 p-6 
           transform transition-transform duration-300 ease-out flex flex-col shadow-2xl
           ${showChapterList && !error ? 'translate-x-0' : 'translate-x-full'}
       `}>
           <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-medium text-white tracking-tight">Chapters</h2>
+              <h2 className="text-xl font-medium text-foreground tracking-tight">Chapters</h2>
               <button 
                 onClick={() => setShowChapterList(false)}
-                className="p-2 rounded-full hover:bg-white/10 transition-colors text-white/50 hover:text-white"
+                className="p-2 rounded-full hover:bg-accent transition-colors text-muted-foreground hover:text-accent-foreground"
               >
                   <span className="material-icons-round">close</span>
               </button>
@@ -1009,22 +1009,22 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                         className={`
                             group w-full flex items-center p-3 rounded-xl text-left transition-all duration-200
                             ${isActive 
-                                ? 'bg-white text-black shadow-lg shadow-white/5' 
-                                : 'text-zinc-400 hover:bg-white/5 hover:text-white'
+                                ? 'bg-primary text-primary-foreground shadow-lg' 
+                                : 'text-muted-foreground hover:bg-accent/80 hover:text-foreground'
                             }
                         `}
                     >   
                         {/* Index */}
                         <div className={`
                             w-8 h-8 rounded-lg flex items-center justify-center mr-3 text-xs font-bold transition-colors
-                            ${isActive ? 'bg-black/10 text-black' : 'bg-white/5 text-white/40 group-hover:bg-white/10 group-hover:text-white'}
+                            ${isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground group-hover:bg-accent group-hover:text-foreground'}
                         `}>
                             {i + 1}
                         </div>
 
                         <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium truncate">{chapter.title}</div>
-                            <div className={`text-xs font-mono mt-0.5 ${isActive ? 'text-black/60' : 'text-white/30'}`}>
+                            <div className={`text-xs font-mono mt-0.5 ${isActive ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
                                 {formatTime(chapter.startTime)}
                             </div>
                         </div>
@@ -1040,27 +1040,27 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
 
       {/* Top Bar (Title & Back) */}
       <div className={`
-        absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/90 via-black/40 to-transparent 
+        absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-background/95 via-background/70 to-transparent border-b border-border/50
         flex items-start justify-between p-6 transition-all duration-500 ease-out z-20
         ${(showControls && !error) ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'}
       `}>
           <div className="flex items-center space-x-6">
               <button 
                 onClick={onBack}
-                className="group p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 backdrop-blur-md transition-all duration-200 hover:scale-110"
+                className="group p-2 rounded-full bg-card/90 hover:bg-accent border border-border backdrop-blur-md transition-all duration-200 hover:scale-110 text-muted-foreground hover:text-accent-foreground"
               >
-                  <span className="material-icons-round text-white text-xl">arrow_back</span>
+                  <span className="material-icons-round text-xl">arrow_back</span>
               </button>
               <div>
-                  <h1 className="text-white font-medium text-lg tracking-wide drop-shadow-md flex items-center">
+                  <h1 className="text-foreground font-medium text-lg tracking-wide drop-shadow-md flex items-center">
                     {video.name}
                     {wasPlayed && (
-                        <span className="ml-3 px-2 py-0.5 rounded bg-white/10 border border-white/10 text-[9px] font-bold text-vision-purple tracking-wider uppercase">
+                        <span className="ml-3 px-2 py-0.5 rounded bg-primary/20 border border-primary/35 text-[9px] font-bold text-primary tracking-wider uppercase">
                             Resumed
                         </span>
                     )}
                   </h1>
-                  <div className="flex items-center space-x-2 text-xs text-white/60 mt-0.5">
+                  <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-0.5">
                       <span className="uppercase tracking-wider font-bold">{video.metadata.resolution}</span>
                       <span>•</span>
                       <span>{video.metadata.duration}</span>
@@ -1073,7 +1073,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
               {chapters.length > 0 && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); setShowChapterList(!showChapterList); setShowStats(false); setShowSettings(false); }}
-                    className={`p-2.5 rounded-full transition-all duration-200 ${showChapterList ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white'}`}
+                    className={`p-2.5 rounded-full transition-all duration-200 border ${showChapterList ? 'bg-primary text-primary-foreground border-primary/60 shadow-lg' : 'bg-card/90 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
                     title="Chapters"
                   >
                       <span className="material-icons-round text-xl">format_list_bulleted</span>
@@ -1082,7 +1082,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
               
               <button 
                 onClick={() => { setShowStats(!showStats); setShowChapterList(false); setShowSettings(false); }}
-                className={`p-2.5 rounded-full transition-all duration-200 ${showStats ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white'}`}
+                className={`p-2.5 rounded-full transition-all duration-200 border ${showStats ? 'bg-primary text-primary-foreground border-primary/60 shadow-lg' : 'bg-card/90 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
                 title="Stats for Nerds (I)"
               >
                   <span className="material-icons-round text-xl">insights</span>
@@ -1092,101 +1092,101 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
 
       {/* Nerd Stats Overlay */}
       <div className={`
-        absolute top-20 right-3 sm:right-6 w-[calc(100vw-1.5rem)] max-w-[26rem] bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl p-0 text-[11px] text-white/90 z-20 shadow-2xl transition-all duration-500 ease-out font-mono overflow-hidden
+        absolute top-20 right-3 sm:right-6 w-[calc(100vw-1.5rem)] max-w-[26rem] bg-popover/95 backdrop-blur-xl border border-border rounded-xl p-0 text-[11px] text-foreground z-20 shadow-2xl transition-all duration-500 ease-out font-mono overflow-hidden
         ${showStats && !error ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'}
       `}>
-          <div className="bg-white/5 px-4 py-3 flex justify-between items-center border-b border-white/10 gap-2">
+          <div className="bg-muted/40 px-4 py-3 flex justify-between items-center border-b border-border gap-2">
               <div>
                   <h3 className="font-bold uppercase tracking-widest text-xs">Stats for Nerds</h3>
-                  <p className="text-[10px] text-white/50 mt-0.5">{runtimeInfo.browser} • {runtimeInfo.platform}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{runtimeInfo.browser} • {runtimeInfo.platform}</p>
               </div>
               <div className="flex items-center gap-2">
                   <button
                     onClick={handleCopyNerdSpecs}
-                    className="px-2 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wide border border-white/20 text-white/80 hover:text-white hover:border-white/40 transition-colors"
+                    className="px-2 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wide border border-border bg-background/60 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                     title="Copy all specs"
                   >
                     {specsCopyState === 'copied' ? 'Copied' : specsCopyState === 'failed' ? 'Retry' : 'Copy'}
                   </button>
-                  <button onClick={() => setShowStats(false)} className="text-white/50 hover:text-white"><span className="material-icons-round text-sm">close</span></button>
+                  <button onClick={() => setShowStats(false)} className="text-muted-foreground hover:text-foreground"><span className="material-icons-round text-sm">close</span></button>
               </div>
           </div>
           
-          <div className="p-4 space-y-3 leading-relaxed selection:bg-white/20">
+          <div className="p-4 space-y-3 leading-relaxed selection:bg-primary/20">
               <div>
-                  <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">Playback</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Playback</div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Played</span>
+                      <span className="text-muted-foreground">Played</span>
                       <span>{formatTime(currentTime)} / {formatTime(effectiveDuration)} ({playedPercent.toFixed(1)}%)</span>
                   </div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Buffer</span>
+                      <span className="text-muted-foreground">Buffer</span>
                       <span className={realtimeStats.buffer < 2 ? 'text-red-400' : 'text-green-400'}>{realtimeStats.buffer.toFixed(2)} s</span>
                   </div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Health</span>
+                      <span className="text-muted-foreground">Health</span>
                       <span>{streamHealth}</span>
                   </div>
               </div>
 
-              <div className="h-px bg-white/10"></div>
+              <div className="h-px bg-border"></div>
 
               <div>
-                  <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">Video</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Video</div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Source</span>
+                      <span className="text-muted-foreground">Source</span>
                       <span>{realtimeStats.videoWidth}x{realtimeStats.videoHeight} @ {video.metadata.frameRate || '24'} fps</span>
                   </div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Frames</span>
+                      <span className="text-muted-foreground">Frames</span>
                       <span>{realtimeStats.dropped} dropped / {realtimeStats.totalFrames} decoded ({droppedFramePercent.toFixed(2)}%)</span>
                   </div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">FPS</span>
+                      <span className="text-muted-foreground">FPS</span>
                       <span>{realtimeStats.fps} fps</span>
                   </div>
               </div>
 
-              <div className="h-px bg-white/10"></div>
+              <div className="h-px bg-border"></div>
 
               <div>
-                  <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">Display</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Display</div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Viewport</span>
+                      <span className="text-muted-foreground">Viewport</span>
                       <span>{realtimeStats.viewportWidth}x{realtimeStats.viewportHeight}</span>
                   </div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Canvas</span>
+                      <span className="text-muted-foreground">Canvas</span>
                       <span>{realtimeStats.displayWidth}x{realtimeStats.displayHeight} / {aspectRatio}</span>
                   </div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Color</span>
+                      <span className="text-muted-foreground">Color</span>
                       <span>{colorSpace.toUpperCase()} / {video.metadata.hdrType || 'SDR'}</span>
                   </div>
               </div>
 
-              <div className="h-px bg-white/10"></div>
+              <div className="h-px bg-border"></div>
 
               <div>
-                  <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">Audio + Source</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Audio + Source</div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Track</span>
+                      <span className="text-muted-foreground">Track</span>
                       <span className="truncate" title={selectedAudioTrackLabel}>{selectedAudioTrackLabel}</span>
                   </div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Audio</span>
+                      <span className="text-muted-foreground">Audio</span>
                       <span>{video.metadata.audioChannels || '2.0'} ch / {video.metadata.audioCodec}</span>
                   </div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Bitrate</span>
+                      <span className="text-muted-foreground">Bitrate</span>
                       <span>{estimatedSourceBitrateMbps ? `${estimatedSourceBitrateMbps.toFixed(2)} Mb/s (est)` : 'Unavailable'}</span>
                   </div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">File</span>
+                      <span className="text-muted-foreground">File</span>
                       <span>{video.metadata.container} / {formatBytes(video.size)}</span>
                   </div>
                   <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-white/50">Video ID</span>
+                      <span className="text-muted-foreground">Video ID</span>
                       <span className="truncate" title={video.id}>{video.id}</span>
                   </div>
               </div>
@@ -1195,23 +1195,23 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
       
       {/* Settings Menu Overlay */}
       <div className={`
-        absolute bottom-28 right-8 w-80 bg-black/90 backdrop-blur-2xl border border-white/10 rounded-2xl p-0 text-white z-30 shadow-2xl transition-all duration-300 ease-out origin-bottom-right overflow-hidden
+        absolute bottom-28 right-8 w-80 bg-popover/95 backdrop-blur-2xl border border-border rounded-2xl p-0 text-foreground z-30 shadow-2xl transition-all duration-300 ease-out origin-bottom-right overflow-hidden
         ${showSettings && showControls && !error ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}
       `}>
-           <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-white/5">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-white/90">Settings</h4>
-                <button onClick={() => setShowSettings(false)} className="text-white/50 hover:text-white"><span className="material-icons-round text-sm">close</span></button>
+           <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/40">
+                <h4 className="text-xs font-bold uppercase tracking-widest text-foreground">Settings</h4>
+                <button onClick={() => setShowSettings(false)} className="text-muted-foreground hover:text-foreground"><span className="material-icons-round text-sm">close</span></button>
            </div>
            
            <div className="p-5 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
                 
                 {/* Section: Video */}
                 <div>
-                    <h5 className="text-[10px] uppercase font-bold text-white/40 mb-3 tracking-wider">Video</h5>
+                    <h5 className="text-[10px] uppercase font-bold text-muted-foreground mb-3 tracking-wider">Video</h5>
                     
                     {/* Aspect Ratio */}
                     <div className="mb-4">
-                        <span className="block text-xs font-medium text-white/80 mb-2">Aspect Ratio</span>
+                        <span className="block text-xs font-medium text-foreground mb-2">Aspect Ratio</span>
                         <div className="grid grid-cols-4 gap-1.5">
                             {['fit', 'cover', '16:9', 'original'].map(opt => (
                                 <button
@@ -1220,8 +1220,8 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                                     className={`
                                         text-[9px] uppercase py-1.5 rounded border transition-all duration-200
                                         ${aspectRatio === opt 
-                                            ? 'bg-white text-black border-white font-bold' 
-                                            : 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:border-white/20'
+                                            ? 'bg-primary text-primary-foreground border-primary font-bold' 
+                                            : 'bg-background/60 text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground'
                                         }
                                     `}
                                 >
@@ -1239,8 +1239,8 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                                     className={`
                                         text-[9px] uppercase py-1.5 rounded border transition-all duration-200 flex items-center justify-center
                                         ${aspectRatio === opt 
-                                            ? 'bg-white text-black border-white font-bold' 
-                                            : 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:border-white/20'
+                                            ? 'bg-primary text-primary-foreground border-primary font-bold' 
+                                            : 'bg-background/60 text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground'
                                         }
                                     `}
                                 >
@@ -1253,7 +1253,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
 
                     {/* Color Space */}
                     <div>
-                        <span className="block text-xs font-medium text-white/80 mb-2">Color Space</span>
+                        <span className="block text-xs font-medium text-foreground mb-2">Color Space</span>
                         <div className="grid grid-cols-2 gap-2">
                              {([
                                 { id: 'bt709', label: 'BT.709 (SDR)' },
@@ -1266,7 +1266,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                                     onClick={() => setColorSpace(opt.id)}
                                     className={`
                                         flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all
-                                        ${colorSpace === opt.id ? 'bg-white/10 border border-white/30 text-white' : 'hover:bg-white/5 border border-transparent text-white/60'}
+                                        ${colorSpace === opt.id ? 'bg-primary/15 border border-primary/35 text-foreground' : 'hover:bg-accent/80 border border-transparent text-muted-foreground'}
                                     `}
                                  >
                                      <span className="text-[10px] font-medium">{opt.label}</span>
@@ -1277,11 +1277,11 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                     </div>
                 </div>
 
-                <div className="h-px bg-white/10 w-full"></div>
+                <div className="h-px bg-border w-full"></div>
 
                 {/* Section: Audio */}
                 <div>
-                     <h5 className="text-[10px] uppercase font-bold text-white/40 mb-3 tracking-wider">Audio</h5>
+                     <h5 className="text-[10px] uppercase font-bold text-muted-foreground mb-3 tracking-wider">Audio</h5>
                      <div className="space-y-1">
                          {audioTracks.map((track) => (
                              <button
@@ -1289,7 +1289,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                                 onClick={() => setSelectedAudioTrack(track.id)}
                                 className={`
                                     w-full flex items-center px-3 py-2.5 rounded-lg text-left transition-colors
-                                    ${selectedAudioTrack === track.id ? 'bg-white text-black shadow-lg' : 'hover:bg-white/5 text-white/70'}
+                                    ${selectedAudioTrack === track.id ? 'bg-primary text-primary-foreground shadow-lg' : 'hover:bg-accent/80 text-muted-foreground'}
                                 `}
                              >
                                  <div className="flex-1">
@@ -1301,11 +1301,11 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                      </div>
                 </div>
 
-                <div className="h-px bg-white/10 w-full"></div>
+                <div className="h-px bg-border w-full"></div>
 
                 {/* Section: Playback Speed */}
                 <div>
-                    <h5 className="text-[10px] uppercase font-bold text-white/40 mb-3 tracking-wider">Playback Speed</h5>
+                    <h5 className="text-[10px] uppercase font-bold text-muted-foreground mb-3 tracking-wider">Playback Speed</h5>
                     <div className="grid grid-cols-6 gap-1.5">
                         {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
                             <button
@@ -1319,8 +1319,8 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                                 className={`
                                     text-[9px] py-1.5 rounded border transition-all duration-200
                                     ${playbackSpeed === speed
-                                        ? 'bg-white text-black border-white font-bold'
-                                        : 'bg-white/5 text-white/70 border-white/5 hover:bg-white/10 hover:border-white/20'
+                                        ? 'bg-primary text-primary-foreground border-primary font-bold'
+                                        : 'bg-background/60 text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground'
                                     }
                                 `}
                             >
@@ -1330,15 +1330,15 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                     </div>
                 </div>
 
-                <div className="h-px bg-white/10 w-full"></div>
+                <div className="h-px bg-border w-full"></div>
 
                 {/* Section: Subtitles */}
                 <div>
                    <div className="flex items-center justify-between mb-3">
-                       <h5 className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Subtitles</h5>
+                       <h5 className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Subtitles</h5>
                        <button 
                             onClick={() => subtitleInputRef.current?.click()}
-                            className="text-[10px] bg-white/10 hover:bg-white/20 border border-white/5 px-2 py-1 rounded transition-colors"
+                            className="text-[10px] bg-background/70 hover:bg-accent border border-border px-2 py-1 rounded transition-colors"
                        >
                            Upload .SRT
                        </button>
@@ -1349,7 +1349,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                             onClick={() => setSelectedSubtitleTrack('off')}
                             className={`
                                 w-full flex items-center px-3 py-2 rounded-lg text-left transition-colors
-                                ${selectedSubtitleTrack === 'off' ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-white/60'}
+                                ${selectedSubtitleTrack === 'off' ? 'bg-primary/15 text-foreground' : 'hover:bg-accent/80 text-muted-foreground'}
                             `}
                         >
                              <span className="text-xs font-medium">Off</span>
@@ -1362,7 +1362,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                               onClick={() => setSelectedSubtitleTrack(track.id)}
                               className={`
                                   w-full flex items-center px-3 py-2 rounded-lg text-left transition-colors
-                                  ${selectedSubtitleTrack === track.id ? 'bg-white text-black' : 'hover:bg-white/5 text-white/70'}
+                                  ${selectedSubtitleTrack === track.id ? 'bg-primary text-primary-foreground' : 'hover:bg-accent/80 text-muted-foreground'}
                               `}
                            >
                                <span className="text-xs font-medium">{track.label}</span>
@@ -1373,9 +1373,9 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                    
                    {/* Subtitle Adjustments */}
                    {selectedSubtitleTrack !== 'off' && (
-                       <div className="bg-white/5 rounded-lg p-3 space-y-3">
+                       <div className="bg-background/70 border border-border rounded-lg p-3 space-y-3">
                             <div>
-                                <div className="flex justify-between text-[10px] text-white/60 mb-1.5">
+                                <div className="flex justify-between text-[10px] text-muted-foreground mb-1.5">
                                     <span>Size</span>
                                     <span>{Math.round(subtitleSize * 100)}%</span>
                                 </div>
@@ -1383,30 +1383,30 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                                      type="range" min="0.5" max="2" step="0.1" 
                                      value={subtitleSize}
                                      onChange={(e) => setSubtitleSize(parseFloat(e.target.value))}
-                                     className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+                                     className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full"
                                 />
                             </div>
                             
                             <div>
-                                <div className="flex justify-between text-[10px] text-white/60 mb-1.5">
+                                <div className="flex justify-between text-[10px] text-muted-foreground mb-1.5">
                                     <span>Sync Offset</span>
                                     <span className={subtitleOffset !== 0 ? 'text-primary' : ''}>{subtitleOffset > 0 ? '+' : ''}{subtitleOffset.toFixed(1)}s</span>
                                 </div>
-                                <div className="flex items-center space-x-2 bg-black/20 rounded p-1">
-                                     <button onClick={() => setSubtitleOffset(prev => Number((prev - 0.1).toFixed(1)))} className="p-1 hover:bg-white/10 rounded"><span className="material-icons-round text-xs text-white/80">remove</span></button>
+                                <div className="flex items-center space-x-2 bg-muted/60 rounded p-1">
+                                     <button onClick={() => setSubtitleOffset(prev => Number((prev - 0.1).toFixed(1)))} className="p-1 hover:bg-accent rounded"><span className="material-icons-round text-xs text-muted-foreground">remove</span></button>
                                      <div className="flex-1 text-center text-[10px] font-mono">{subtitleOffset.toFixed(1)}s</div>
-                                     <button onClick={() => setSubtitleOffset(prev => Number((prev + 0.1).toFixed(1)))} className="p-1 hover:bg-white/10 rounded"><span className="material-icons-round text-xs text-white/80">add</span></button>
+                                     <button onClick={() => setSubtitleOffset(prev => Number((prev + 0.1).toFixed(1)))} className="p-1 hover:bg-accent rounded"><span className="material-icons-round text-xs text-muted-foreground">add</span></button>
                                 </div>
                             </div>
 
                             <div>
-                                <div className="text-[10px] text-white/60 mb-2">Background</div>
+                                <div className="text-[10px] text-muted-foreground mb-2">Background</div>
                                 <div className="flex gap-2">
                                     {['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)', 'rgba(255,255,255,0.2)', 'transparent'].map((bg, i) => (
                                         <button
                                             key={i}
                                             onClick={() => setSubtitleBackgroundColor(bg)}
-                                            className={`w-6 h-6 rounded border ${subtitleBackgroundColor === bg ? 'border-white ring-1 ring-white/60' : 'border-white/20'}`}
+                                            className={`w-6 h-6 rounded border ${subtitleBackgroundColor === bg ? 'border-primary ring-1 ring-primary/60' : 'border-border'}`}
                                             style={{ background: bg }}
                                         />
                                     ))}
@@ -1414,13 +1414,13 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                             </div>
 
                             <div>
-                                <div className="text-[10px] text-white/60 mb-2">Text Color</div>
+                                <div className="text-[10px] text-muted-foreground mb-2">Text Color</div>
                                 <div className="flex gap-2">
                                     {['#ffffff', '#ffff00', '#00ffff', '#ff0000'].map((color, i) => (
                                         <button
                                             key={i}
                                             onClick={() => setSubtitleTextColor(color)}
-                                            className={`w-6 h-6 rounded border ${subtitleTextColor === color ? 'border-white ring-1 ring-white/60' : 'border-white/20'}`}
+                                            className={`w-6 h-6 rounded border ${subtitleTextColor === color ? 'border-primary ring-1 ring-primary/60' : 'border-border'}`}
                                             style={{ background: color }}
                                         />
                                     ))}
@@ -1434,7 +1434,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
 
       {/* Bottom Controls */}
       <div className={`
-        absolute bottom-0 left-0 right-0 pb-8 pt-20 px-8 bg-gradient-to-t from-black via-black/80 to-transparent 
+        absolute bottom-0 left-0 right-0 pb-8 pt-20 px-8 bg-gradient-to-t from-background/95 via-background/70 to-transparent border-t border-border/50
         flex flex-col space-y-4 transition-all duration-500 ease-out z-20
         ${(showControls && !error) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}
       `}>
@@ -1442,10 +1442,10 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
           {/* Chapter Title Indicator */}
           <div className="flex items-center justify-between h-6 mb-1">
              {currentChapter ? (
-                 <span className="text-sm font-medium text-white/90 drop-shadow-md animate-fade-in">
+                 <span className="text-sm font-medium text-foreground drop-shadow-md animate-fade-in">
                      {currentChapter.title}
-                     <span className="text-white/40 mx-2">•</span>
-                     <span className="text-white/60 text-xs">Chapter {chapters.indexOf(currentChapter) + 1} of {chapters.length}</span>
+                     <span className="text-muted-foreground mx-2">•</span>
+                     <span className="text-muted-foreground text-xs">Chapter {chapters.indexOf(currentChapter) + 1} of {chapters.length}</span>
                  </span>
              ) : <div></div>}
           </div>
@@ -1457,7 +1457,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
             onMouseLeave={handleSeekBarMouseLeave}
           >
              {/* Background Track */}
-             <div className="absolute inset-0 bg-white/20 rounded-full"></div>
+             <div className="absolute inset-0 bg-muted/80 rounded-full"></div>
 
              {/* Chapter Markers (Gaps) */}
              {chapters.map((chapter, i) => {
@@ -1466,33 +1466,33 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                  return (
                      <div 
                         key={i} 
-                        className="absolute top-0 bottom-0 w-0.5 bg-black/80 z-20 pointer-events-none"
+                        className="absolute top-0 bottom-0 w-0.5 bg-border z-20 pointer-events-none"
                         style={{ left: `${left}%` }}
                      />
                  )
-             })}
+              })}
              
              {/* Buffered (Mock) */}
              <div 
-                className="absolute left-0 top-0 bottom-0 bg-white/10 rounded-full" 
+                className="absolute left-0 top-0 bottom-0 bg-accent/70 rounded-full" 
                 style={{ width: `${(currentTime/duration) * 100 + 15}%`, maxWidth: '100%' }}
              />
 
              {/* Hover Ghost Track */}
              {isHoveringSeekBar && hoverTime !== null && (
                 <div 
-                    className="absolute left-0 top-0 bottom-0 bg-white/25 rounded-full pointer-events-none transition-all duration-75 ease-out"
+                    className="absolute left-0 top-0 bottom-0 bg-accent rounded-full pointer-events-none transition-all duration-75 ease-out"
                     style={{ width: `${(hoverTime / duration) * 100}%` }}
                 />
              )}
 
              {/* Played Track */}
              <div 
-                className="absolute left-0 top-0 bottom-0 bg-primary dark:bg-white rounded-full transition-all duration-100"
+                className="absolute left-0 top-0 bottom-0 bg-primary rounded-full transition-all duration-100"
                 style={{ width: `${(currentTime / duration) * 100}%` }}
              >
                 {/* Thumb Scrubber (Visible on Hover) */}
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full scale-0 group-hover:scale-100 transition-transform shadow-lg"></div>
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-primary-foreground rounded-full scale-0 group-hover:scale-100 transition-transform shadow-lg ring-2 ring-primary/35"></div>
              </div>
 
              {/* Seek Bar Hover Tooltip */}
@@ -1501,11 +1501,11 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                     className="absolute bottom-4 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30"
                     style={{ left: `${(hoverTime / duration) * 100}%` }}
                  >
-                     <div className="bg-black/80 backdrop-blur border border-white/10 px-2 py-1 rounded text-[10px] font-medium text-white whitespace-nowrap shadow-xl mb-1">
+                     <div className="bg-popover/95 backdrop-blur border border-border px-2 py-1 rounded text-[10px] font-medium text-foreground whitespace-nowrap shadow-xl mb-1">
                          {hoverChapter ? (
                              <>
-                                <span className="text-white/70 mr-1.5">{hoverChapter.title}</span>
-                                <span className="font-mono text-white">{formatTime(hoverTime)}</span>
+                                <span className="text-muted-foreground mr-1.5">{hoverChapter.title}</span>
+                                <span className="font-mono text-foreground">{formatTime(hoverTime)}</span>
                              </>
                          ) : (
                              <span className="font-mono">{formatTime(hoverTime)}</span>
@@ -1532,7 +1532,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                   {chapters.length > 0 && (
                       <button 
                         onClick={skipPrevChapter}
-                        className="text-white/70 hover:text-white transition-colors"
+                        className="text-muted-foreground hover:text-foreground transition-colors"
                         title="Previous Chapter"
                       >
                           <span className="material-icons-round text-2xl">skip_previous</span>
@@ -1542,7 +1542,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                   {/* Play / Pause */}
                   <button 
                     onClick={togglePlay}
-                    className="text-white hover:text-white/80 transition-transform active:scale-95"
+                    className="text-foreground hover:text-foreground/80 transition-transform active:scale-95"
                   >
                       <span className="material-icons-round text-4xl">
                           {isPlaying ? 'pause' : 'play_arrow'}
@@ -1553,7 +1553,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                   {chapters.length > 0 && (
                       <button 
                         onClick={skipNextChapter}
-                        className="text-white/70 hover:text-white transition-colors"
+                        className="text-muted-foreground hover:text-foreground transition-colors"
                         title="Next Chapter"
                       >
                           <span className="material-icons-round text-2xl">skip_next</span>
@@ -1562,7 +1562,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
 
                   {/* Volume Group */}
                   <div className="group flex items-center space-x-2 ml-2">
-                      <button onClick={toggleMute} className="text-white/80 hover:text-white">
+                      <button onClick={toggleMute} className="text-muted-foreground hover:text-foreground">
                           <span className="material-icons-round text-2xl">
                               {isMuted || volume === 0 ? 'volume_off' : volume < 0.5 ? 'volume_down' : 'volume_up'}
                           </span>
@@ -1577,16 +1577,16 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                             step="0.05"
                             value={volume}
                             onChange={handleVolumeRange}
-                            className="w-20 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+                            className="w-20 h-1 bg-muted rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full"
                           />
                       </div>
                   </div>
 
                   {/* Time Display */}
-                  <div className="text-sm font-medium font-mono text-white/90 ml-2">
+                  <div className="text-sm font-medium font-mono text-foreground ml-2">
                       <span>{formatTime(currentTime)}</span>
-                      <span className="mx-2 text-white/40">/</span>
-                      <span className="text-white/60">{formatTime(duration)}</span>
+                      <span className="mx-2 text-muted-foreground">/</span>
+                      <span className="text-muted-foreground">{formatTime(duration)}</span>
                   </div>
               </div>
 
@@ -1594,13 +1594,13 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
               <div className="flex items-center space-x-5">
                    
                    {/* Format Badges */}
-                   <div className="flex items-center space-x-3 mr-2 border-r border-white/10 pr-4 h-6">
+                   <div className="flex items-center space-x-3 mr-2 border-r border-border pr-4 h-6">
                         {isHDR && (
                             <div className={`
                                 flex items-center px-2 py-0.5 rounded border select-none
                                 ${isDolbyVision 
-                                    ? 'bg-white/10 border-white/30 text-white' 
-                                    : 'bg-black/20 border-white/20 text-white/80'
+                                    ? 'bg-primary/15 border-primary/35 text-foreground' 
+                                    : 'bg-background/70 border-border text-muted-foreground'
                                 }
                             `}>
                                 {isDolbyVision ? (
@@ -1614,15 +1614,15 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                         )}
 
                         {isAtmos ? (
-                            <div className="flex items-center px-2 py-0.5 rounded border border-white/30 bg-white/10 text-white select-none">
+                            <div className="flex items-center px-2 py-0.5 rounded border border-primary/35 bg-primary/15 text-foreground select-none">
                                 <BadgeDolbyAtmos className="h-2.5 text-[10px]" />
                             </div>
                         ) : isDTS ? (
-                            <div className="flex items-center px-2 py-0.5 rounded border border-white/20 bg-black/20 text-white/80 select-none">
+                            <div className="flex items-center px-2 py-0.5 rounded border border-border bg-background/70 text-muted-foreground select-none">
                                 <BadgeDTS className="h-2.5 text-[12px]" />
                             </div>
                         ) : isDD ? (
-                           <div className="flex items-center px-2 py-0.5 rounded border border-white/20 bg-black/20 text-white/80 select-none">
+                           <div className="flex items-center px-2 py-0.5 rounded border border-border bg-background/70 text-muted-foreground select-none">
                                <BadgeDDPlus className="h-2.5 text-[10px]" />
                            </div>
                         ) : null}
@@ -1631,7 +1631,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                    {/* CC Button */}
                    <button 
                         onClick={toggleSubtitles}
-                        className={`text-2xl transition-colors ${selectedSubtitleTrack !== 'off' ? 'text-white' : 'text-white/60 hover:text-white'}`}
+                        className={`text-2xl transition-colors ${selectedSubtitleTrack !== 'off' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                         title={subtitleTracks.length > 0 ? (selectedSubtitleTrack !== 'off' ? "Disable Subtitles" : "Enable Subtitles") : "Upload Subtitles"}
                    >
                        <span className="material-icons-round">{selectedSubtitleTrack !== 'off' ? 'closed_caption' : 'closed_caption_disabled'}</span>
@@ -1639,7 +1639,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
 
                    <button 
                         onClick={() => { setShowSettings(!showSettings); setShowStats(false); setShowChapterList(false); }}
-                        className={`transition-colors ${showSettings ? 'text-white' : 'text-white/60 hover:text-white'}`} 
+                        className={`transition-colors ${showSettings ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`} 
                         title="Settings"
                    >
                        <span className="material-icons-round text-2xl">settings</span>
@@ -1647,7 +1647,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                    
                     <button 
                         onClick={togglePip}
-                        className="text-white/60 hover:text-white transition-colors" 
+                        className="text-muted-foreground hover:text-foreground transition-colors" 
                         title="Picture in Picture"
                     >
                         <span className="material-icons-round text-2xl">picture_in_picture_alt</span>
@@ -1655,7 +1655,7 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
 
                    <button 
                         onClick={toggleFullscreen}
-                        className="text-white hover:text-white/80 transition-transform active:scale-90" 
+                        className="text-foreground hover:text-foreground/80 transition-transform active:scale-90" 
                         title="Fullscreen"
                     >
                        <span className="material-icons-round text-3xl">
