@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { VideoFile } from '../types';
+import { MediaTechnicalReport, MediaTechnicalTrack, VideoFile } from '../types';
 
 interface PlayerProps {
   video: VideoFile;
   onBack: () => void;
   onProgress?: (position: number, duration: number) => void;
+  technicalReport?: MediaTechnicalReport | null;
+  technicalReportLoading?: boolean;
 }
 
 interface SubtitleCue {
@@ -106,7 +108,84 @@ const detectPlatformName = (userAgent: string, platform: string) => {
   return platform || 'Unknown Platform';
 };
 
-export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => {
+const DEFAULT_NERD_SECTION_STATE: Record<string, boolean> = {
+  runtime: false,
+  general: false,
+  video: false,
+  audio: false,
+  text: false,
+  menu: false,
+  image: false,
+  other: false,
+  raw: false,
+};
+
+const formatTechnicalValue = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return 'N/A';
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value.toString() : 'N/A';
+  }
+
+  if (typeof value === 'string') {
+    return value.trim() || 'N/A';
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+};
+
+const getFirstString = (...values: unknown[]): string | undefined => {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+      continue;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+
+  return undefined;
+};
+
+const getTrackDisplayName = (track: MediaTechnicalTrack, index: number) => {
+  const title = track.title?.trim();
+  if (title) {
+    return title;
+  }
+
+  const parts = [`${track.type} ${index + 1}`];
+  if (track.language) {
+    parts.push(track.language);
+  }
+  if (track.id) {
+    parts.push(`ID ${track.id}`);
+  }
+
+  return parts.join(' • ');
+};
+
+export const Player: React.FC<PlayerProps> = ({
+  video,
+  onBack,
+  onProgress,
+  technicalReport = null,
+  technicalReportLoading = false,
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const subtitleInputRef = useRef<HTMLInputElement>(null);
@@ -168,34 +247,69 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
   const lastProgressEmitRef = useRef(0);
   const copySpecsTimeoutRef = useRef<number | null>(null);
   const [specsCopyState, setSpecsCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [expandedNerdSections, setExpandedNerdSections] = useState<Record<string, boolean>>(DEFAULT_NERD_SECTION_STATE);
+  const [expandedTrackFields, setExpandedTrackFields] = useState<Record<string, boolean>>({});
 
   // --- Initialize Tracks (Mocking based on Metadata) ---
   useEffect(() => {
-    // 1. Audio Tracks
-    const mockAudio: Track[] = [
+    const reportAudioTracks = technicalReport?.tracks.audio ?? [];
+
+    if (reportAudioTracks.length > 0) {
+      const mappedAudioTracks: Track[] = reportAudioTracks.map((track, index) => {
+        const fields = track.fields;
+        const label = getFirstString(
+          fields.Title,
+          fields.Format_Commercial_IfAny,
+          fields.Format_Commercial,
+          fields.Format,
+          track.title,
+        ) ?? `Audio ${index + 1}`;
+
+        const channels = getFirstString(fields.Channels_String2, fields.ChannelLayout, fields.Channels);
+        const language = getFirstString(track.language, fields.Language_String3, fields.Language);
+
+        return {
+          id: track.id || `audio-${index + 1}`,
+          label: [label, channels].filter(Boolean).join(' • '),
+          lang: language,
+          isDefault: index === 0,
+        };
+      });
+
+      setAudioTracks(mappedAudioTracks);
+      setSelectedAudioTrack((previous) => (
+        mappedAudioTracks.some((track) => track.id === previous)
+          ? previous
+          : mappedAudioTracks[0]?.id ?? '1'
+      ));
+    } else {
+      const mockAudio: Track[] = [
         { id: '1', label: `${video.metadata.audioCodec || 'AAC'} 5.1 (Default)`, lang: 'en', isDefault: true },
-        { id: '2', label: 'Stereo (AAC)', lang: 'en' }
-    ];
-    
-    // Parse duration string to seconds
-    const timeParts = video.metadata.duration.split(':').reverse().map(Number);
-    let seconds = 0;
-    if (timeParts[0]) seconds += timeParts[0];
-    if (timeParts[1]) seconds += timeParts[1] * 60;
-    if (timeParts[2]) seconds += timeParts[2] * 3600;
+        { id: '2', label: 'Stereo (AAC)', lang: 'en' },
+      ];
 
-    // Add commentary if it looks like a movie
-    if (seconds > 1800) { // > 30 mins
+      const timeParts = video.metadata.duration.split(':').reverse().map(Number);
+      let seconds = 0;
+      if (timeParts[0]) seconds += timeParts[0];
+      if (timeParts[1]) seconds += timeParts[1] * 60;
+      if (timeParts[2]) seconds += timeParts[2] * 3600;
+
+      if (seconds > 1800) {
         mockAudio.push({ id: '3', label: 'Director Commentary', lang: 'en' });
-    }
-    setAudioTracks(mockAudio);
+      }
 
-    // 2. Subtitle Tracks
-    // We start with none unless we want to mock embedded ones. 
-    // Let's assume one embedded English track if it's a "file" type that usually supports it.
-    const mockSubs: Track[] = [];
-    setSubtitleTracks(mockSubs);
-  }, [video]);
+      setAudioTracks(mockAudio);
+      setSelectedAudioTrack((previous) => (mockAudio.some((track) => track.id === previous) ? previous : '1'));
+    }
+
+    setSubtitleTracks((previous) => previous.filter((track) => track.id.startsWith('upload-')));
+  }, [technicalReport, video.metadata.audioCodec, video.metadata.duration]);
+
+  useEffect(() => {
+    setExpandedNerdSections(DEFAULT_NERD_SECTION_STATE);
+    setExpandedTrackFields({});
+    setSpecsCopyState('idle');
+  }, [video.id]);
 
   // --- HDR Support Check ---
   useEffect(() => {
@@ -346,6 +460,22 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
     return 'Stable';
   }, [droppedFramePercent, realtimeStats.buffer]);
 
+  const technicalTracks = technicalReport?.tracks;
+
+  const toggleNerdSection = useCallback((section: keyof typeof DEFAULT_NERD_SECTION_STATE) => {
+    setExpandedNerdSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  }, []);
+
+  const toggleTrackFields = useCallback((trackKey: string) => {
+    setExpandedTrackFields((prev) => ({
+      ...prev,
+      [trackKey]: !prev[trackKey],
+    }));
+  }, []);
+
   const nerdSnapshot = useMemo(() => {
     return {
       media: {
@@ -391,6 +521,9 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
         platform: runtimeInfo.platform,
         userAgent: runtimeInfo.userAgent,
       },
+      metadataSummary: video.metadata,
+      technicalReportLoaded: Boolean(technicalReport),
+      technicalReport,
       capturedAt: new Date().toISOString(),
     };
   }, [
@@ -427,6 +560,8 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
     video.name,
     video.size,
     volume,
+    technicalReport,
+    video.metadata,
   ]);
 
   const handleCopyNerdSpecs = useCallback(async () => {
@@ -448,6 +583,20 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
     }
     copySpecsTimeoutRef.current = window.setTimeout(() => setSpecsCopyState('idle'), 2000);
   }, [nerdSnapshot]);
+
+  const handleDownloadNerdSpecs = useCallback(() => {
+    const blob = new Blob([JSON.stringify(nerdSnapshot, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    const objectUrl = URL.createObjectURL(blob);
+
+    link.href = objectUrl;
+    link.download = `${video.name.replace(/[^a-z0-9-_]/gi, '_')}-nerd-specs.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(objectUrl);
+  }, [nerdSnapshot, video.name]);
   
   const intro = video.metadata.intro;
   const showSkipIntro = intro && currentTime >= intro.start && currentTime < intro.end;
@@ -894,6 +1043,84 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
 
   const hideCursor = isPlaying && !showControls && !showChapterList && !showSettings && !showStats && !error;
 
+  const renderTechnicalTrackList = (tracks: MediaTechnicalTrack[], sectionKey: string) => {
+    if (tracks.length === 0) {
+      return <p className="text-[11px] text-muted-foreground py-2">No track data available.</p>;
+    }
+
+    return (
+      <div className="space-y-2">
+        {tracks.map((track, index) => {
+          const trackKey = `${sectionKey}-${index}`;
+          const showFields = Boolean(expandedTrackFields[trackKey]);
+          const entries = Object.entries(track.fields)
+            .filter(([, value]) => value !== undefined)
+            .sort(([left], [right]) => left.localeCompare(right));
+
+          return (
+            <div key={trackKey} className="border border-border rounded-lg bg-background/65">
+              <div className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground truncate" title={getTrackDisplayName(track, index)}>{getTrackDisplayName(track, index)}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1 truncate" title={[track.format, track.codecId].filter(Boolean).join(' • ')}>
+                      {[track.format, track.codecId, track.language].filter(Boolean).join(' • ') || 'No quick summary'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => toggleTrackFields(trackKey)}
+                    className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                  >
+                    {showFields ? 'Hide fields' : `Show fields (${entries.length})`}
+                  </button>
+                </div>
+
+                {showFields && (
+                  <div className="mt-3 max-h-64 overflow-y-auto pr-1 space-y-1">
+                    {entries.map(([field, value]) => (
+                      <div key={field} className="grid grid-cols-[8.5rem_1fr] gap-x-2 items-start text-[10px]">
+                        <span className="text-muted-foreground break-all">{field}</span>
+                        <span className="text-foreground whitespace-pre-wrap break-all">{formatTechnicalValue(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderNerdSection = (
+    section: keyof typeof DEFAULT_NERD_SECTION_STATE,
+    title: string,
+    content: React.ReactNode,
+    count?: number,
+  ) => {
+    const isOpen = Boolean(expandedNerdSections[section]);
+
+    return (
+      <div className="border border-border rounded-lg overflow-hidden bg-background/60">
+        <button
+          onClick={() => toggleNerdSection(section)}
+          className="w-full px-3 py-2.5 flex items-center justify-between hover:bg-accent/60 transition-colors"
+        >
+          <span className="text-[11px] font-semibold text-foreground uppercase tracking-wide">
+            {title}
+            {typeof count === 'number' ? <span className="ml-1.5 text-muted-foreground">({count})</span> : null}
+          </span>
+          <span className={`material-icons-round text-sm text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`}>
+            expand_more
+          </span>
+        </button>
+
+        {isOpen && <div className="px-3 pb-3">{content}</div>}
+      </div>
+    );
+  };
+
   return (
     <div 
       ref={containerRef}
@@ -1108,88 +1335,75 @@ export const Player: React.FC<PlayerProps> = ({ video, onBack, onProgress }) => 
                   >
                     {specsCopyState === 'copied' ? 'Copied' : specsCopyState === 'failed' ? 'Retry' : 'Copy'}
                   </button>
+                  <button
+                    onClick={handleDownloadNerdSpecs}
+                    className="px-2 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wide border border-border bg-background/60 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                    title="Download full JSON report"
+                  >
+                    Export
+                  </button>
                   <button onClick={() => setShowStats(false)} className="text-muted-foreground hover:text-foreground"><span className="material-icons-round text-sm">close</span></button>
               </div>
           </div>
           
-          <div className="p-4 space-y-3 leading-relaxed selection:bg-primary/20">
-              <div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Playback</div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Played</span>
-                      <span>{formatTime(currentTime)} / {formatTime(effectiveDuration)} ({playedPercent.toFixed(1)}%)</span>
-                  </div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Buffer</span>
-                      <span className={realtimeStats.buffer < 2 ? 'text-red-400' : 'text-green-400'}>{realtimeStats.buffer.toFixed(2)} s</span>
-                  </div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Health</span>
-                      <span>{streamHealth}</span>
-                  </div>
-              </div>
+          <div className="p-4 space-y-3 leading-relaxed selection:bg-primary/20 max-h-[68vh] overflow-y-auto">
+              {technicalReportLoading && (
+                <p className="text-[11px] text-muted-foreground">Loading full technical report…</p>
+              )}
 
-              <div className="h-px bg-border"></div>
+              {!technicalReport && !technicalReportLoading && (
+                <p className="text-[11px] text-muted-foreground">
+                  Full report is not available yet. Runtime telemetry is still shown below.
+                </p>
+              )}
 
-              <div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Video</div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Source</span>
-                      <span>{realtimeStats.videoWidth}x{realtimeStats.videoHeight} @ {video.metadata.frameRate || '24'} fps</span>
+              {renderNerdSection(
+                'runtime',
+                'Runtime Playback',
+                <div className="space-y-1.5 pt-1">
+                  <div className="grid grid-cols-[7rem_1fr] gap-x-2">
+                    <span className="text-muted-foreground">Played</span>
+                    <span>{formatTime(currentTime)} / {formatTime(effectiveDuration)} ({playedPercent.toFixed(1)}%)</span>
                   </div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Frames</span>
-                      <span>{realtimeStats.dropped} dropped / {realtimeStats.totalFrames} decoded ({droppedFramePercent.toFixed(2)}%)</span>
+                  <div className="grid grid-cols-[7rem_1fr] gap-x-2">
+                    <span className="text-muted-foreground">Frames</span>
+                    <span>{realtimeStats.dropped} dropped / {realtimeStats.totalFrames} decoded ({droppedFramePercent.toFixed(2)}%)</span>
                   </div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">FPS</span>
-                      <span>{realtimeStats.fps} fps</span>
+                  <div className="grid grid-cols-[7rem_1fr] gap-x-2">
+                    <span className="text-muted-foreground">Buffer</span>
+                    <span className={realtimeStats.buffer < 2 ? 'text-red-400' : 'text-green-500'}>{realtimeStats.buffer.toFixed(2)} s</span>
                   </div>
-              </div>
+                  <div className="grid grid-cols-[7rem_1fr] gap-x-2">
+                    <span className="text-muted-foreground">Health</span>
+                    <span>{streamHealth}</span>
+                  </div>
+                  <div className="grid grid-cols-[7rem_1fr] gap-x-2">
+                    <span className="text-muted-foreground">Display</span>
+                    <span>{realtimeStats.displayWidth}x{realtimeStats.displayHeight} / {aspectRatio}</span>
+                  </div>
+                  <div className="grid grid-cols-[7rem_1fr] gap-x-2">
+                    <span className="text-muted-foreground">Active audio</span>
+                    <span className="truncate" title={selectedAudioTrackLabel}>{selectedAudioTrackLabel}</span>
+                  </div>
+                </div>,
+                1,
+              )}
 
-              <div className="h-px bg-border"></div>
+              {renderNerdSection('general', 'General / Container', renderTechnicalTrackList(technicalTracks?.general ?? [], 'general'), technicalTracks?.general?.length ?? 0)}
+              {renderNerdSection('video', 'Video Streams', renderTechnicalTrackList(technicalTracks?.video ?? [], 'video'), technicalTracks?.video?.length ?? 0)}
+              {renderNerdSection('audio', 'Audio Streams', renderTechnicalTrackList(technicalTracks?.audio ?? [], 'audio'), technicalTracks?.audio?.length ?? 0)}
+              {renderNerdSection('text', 'Subtitle / Text Streams', renderTechnicalTrackList(technicalTracks?.text ?? [], 'text'), technicalTracks?.text?.length ?? 0)}
+              {renderNerdSection('menu', 'Menu / Chapter Tracks', renderTechnicalTrackList(technicalTracks?.menu ?? [], 'menu'), technicalTracks?.menu?.length ?? 0)}
+              {renderNerdSection('image', 'Image Streams', renderTechnicalTrackList(technicalTracks?.image ?? [], 'image'), technicalTracks?.image?.length ?? 0)}
+              {renderNerdSection('other', 'Other Streams', renderTechnicalTrackList(technicalTracks?.other ?? [], 'other'), technicalTracks?.other?.length ?? 0)}
 
-              <div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Display</div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Viewport</span>
-                      <span>{realtimeStats.viewportWidth}x{realtimeStats.viewportHeight}</span>
-                  </div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Canvas</span>
-                      <span>{realtimeStats.displayWidth}x{realtimeStats.displayHeight} / {aspectRatio}</span>
-                  </div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Color</span>
-                      <span>{colorSpace.toUpperCase()} / {video.metadata.hdrType || 'SDR'}</span>
-                  </div>
-              </div>
-
-              <div className="h-px bg-border"></div>
-
-              <div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Audio + Source</div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Track</span>
-                      <span className="truncate" title={selectedAudioTrackLabel}>{selectedAudioTrackLabel}</span>
-                  </div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Audio</span>
-                      <span>{video.metadata.audioChannels || '2.0'} ch / {video.metadata.audioCodec}</span>
-                  </div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Bitrate</span>
-                      <span>{estimatedSourceBitrateMbps ? `${estimatedSourceBitrateMbps.toFixed(2)} Mb/s (est)` : 'Unavailable'}</span>
-                  </div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">File</span>
-                      <span>{video.metadata.container} / {formatBytes(video.size)}</span>
-                  </div>
-                  <div className="grid grid-cols-[6.5rem_1fr] gap-x-2">
-                      <span className="text-muted-foreground">Video ID</span>
-                      <span className="truncate" title={video.id}>{video.id}</span>
-                  </div>
-              </div>
+              {renderNerdSection(
+                'raw',
+                'Raw JSON Report',
+                <pre className="text-[10px] text-foreground whitespace-pre-wrap break-all bg-background/70 border border-border rounded p-2 max-h-80 overflow-auto">
+{JSON.stringify(technicalReport ?? { metadata: video.metadata, runtime: nerdSnapshot.render }, null, 2)}
+                </pre>,
+              )}
           </div>
       </div>
       

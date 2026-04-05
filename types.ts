@@ -9,6 +9,45 @@ export interface Chapter {
     endTime?: number;
 }
 
+export type MediaAnalysisStatus = 'pending' | 'ready' | 'failed';
+
+export type TechnicalTrackType = 'General' | 'Video' | 'Audio' | 'Text' | 'Image' | 'Menu' | 'Other';
+
+export interface MediaTechnicalTrack {
+    type: TechnicalTrackType;
+    index: number;
+    order?: string;
+    id?: string;
+    language?: string;
+    title?: string;
+    format?: string;
+    codecId?: string;
+    fields: Record<string, unknown>;
+}
+
+export interface MediaTechnicalReport {
+    analyzer: 'mediainfo.js' | 'fallback';
+    generatedAt: number;
+    fileName: string;
+    fileSize: number;
+    creatingLibrary?: {
+        name?: string;
+        version?: string;
+        url?: string;
+    };
+    tracks: {
+        general: MediaTechnicalTrack[];
+        video: MediaTechnicalTrack[];
+        audio: MediaTechnicalTrack[];
+        text: MediaTechnicalTrack[];
+        image: MediaTechnicalTrack[];
+        menu: MediaTechnicalTrack[];
+        other: MediaTechnicalTrack[];
+    };
+    raw?: Record<string, unknown>;
+    analysisError?: string;
+}
+
 export interface VideoMetadata {
     duration: string;
     durationSeconds: number;
@@ -21,8 +60,16 @@ export interface VideoMetadata {
     bitrate?: string;
     frameRate?: string;
     colorSpace?: string;
+    videoBitDepth?: string;
+    chromaSubsampling?: string;
+    scanType?: string;
+    masteringDisplay?: string;
+    maxCLL?: string;
+    maxFALL?: string;
     intro?: { start: number; end: number };
     chapters?: Chapter[];
+    analysisStatus?: MediaAnalysisStatus;
+    analysisError?: string;
 }
 
 export interface VideoFile {

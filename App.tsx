@@ -7,8 +7,9 @@ import { PlaylistView } from './components/PlaylistView';
 import { HistoryView } from './components/HistoryView';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { VideoFile, Playlist, WatchHistoryEntry } from './types';
-import { deleteMediaBlob, getMediaBlob, putMediaFile } from './lib/mediaStore';
+import { VideoFile, Playlist, WatchHistoryEntry, MediaTechnicalReport, VideoMetadata } from './types';
+import { deleteMediaBlob, deleteTechnicalReport, getMediaBlob, getTechnicalReport, putMediaFile, putTechnicalReport } from './lib/mediaStore';
+import { analyzeMediaBlob, analyzeMediaFile, buildFallbackTechnicalReport } from './lib/mediaInfo';
 
 const STORAGE_KEY_LIBRARY = 'nova_library';
 const STORAGE_KEY_PLAYLISTS = 'nova_playlists';
@@ -70,6 +71,8 @@ const App: React.FC = () => {
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
     const [isStorageLoaded, setIsStorageLoaded] = useState(false);
+    const [technicalReports, setTechnicalReports] = useState<Record<string, MediaTechnicalReport>>({});
+    const [isTechnicalReportLoading, setIsTechnicalReportLoading] = useState(false);
     const managedUrlsRef = useRef<Set<string>>(new Set());
 
     const createManagedUrl = useCallback((blob: Blob) => {
@@ -89,6 +92,30 @@ const App: React.FC = () => {
 
     const toPersistedLibrary = useCallback((videos: VideoFile[]): PersistedVideo[] => {
         return videos.map(({ url, file, ...rest }) => rest);
+    }, []);
+
+    const updateVideoMetadata = useCallback((videoId: string, updater: (previous: VideoMetadata) => VideoMetadata) => {
+        setLibrary((prev) => prev.map((video) => {
+            if (video.id !== videoId) {
+                return video;
+            }
+
+            return {
+                ...video,
+                metadata: updater(video.metadata),
+            };
+        }));
+
+        setCurrentVideo((prev) => {
+            if (!prev || prev.id !== videoId) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                metadata: updater(prev.metadata),
+            };
+        });
     }, []);
 
     useEffect(() => {
@@ -205,15 +232,100 @@ const App: React.FC = () => {
         }
     }, [isStorageLoaded, watchHistory]);
 
+    useEffect(() => {
+        if (!currentVideo) {
+            setIsTechnicalReportLoading(false);
+            return;
+        }
+
+        if (technicalReports[currentVideo.id]) {
+            setIsTechnicalReportLoading(false);
+            return;
+        }
+
+        let isCancelled = false;
+
+        const loadTechnicalReport = async () => {
+            setIsTechnicalReportLoading(true);
+
+            try {
+                const storedReport = await getTechnicalReport(currentVideo.id);
+                if (storedReport) {
+                    if (!isCancelled) {
+                        setTechnicalReports((prev) => ({
+                            ...prev,
+                            [currentVideo.id]: storedReport,
+                        }));
+                    }
+                    return;
+                }
+
+                const blob = await getMediaBlob(currentVideo.id);
+                if (!blob) {
+                    return;
+                }
+
+                const extension = currentVideo.metadata.container?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
+                const inferredName = currentVideo.name.includes('.') ? currentVideo.name : `${currentVideo.name}.${extension}`;
+
+                const { metadata, report } = await analyzeMediaBlob(blob, inferredName, currentVideo.metadata);
+                await putTechnicalReport(currentVideo.id, report);
+
+                if (isCancelled) {
+                    return;
+                }
+
+                setTechnicalReports((prev) => ({
+                    ...prev,
+                    [currentVideo.id]: report,
+                }));
+
+                updateVideoMetadata(currentVideo.id, () => ({
+                    ...metadata,
+                    analysisStatus: 'ready',
+                    analysisError: undefined,
+                }));
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Failed to load technical report.';
+
+                if (!isCancelled) {
+                    updateVideoMetadata(currentVideo.id, (previous) => ({
+                        ...previous,
+                        analysisStatus: 'failed',
+                        analysisError: message,
+                    }));
+                }
+            } finally {
+                if (!isCancelled) {
+                    setIsTechnicalReportLoading(false);
+                }
+            }
+        };
+
+        void loadTechnicalReport();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [currentVideo, technicalReports, updateVideoMetadata]);
+
     const handleFileDrop = useCallback((fileList: FileList) => {
         const files = Array.from(fileList);
-        const newFiles: VideoFile[] = files.map((file) => ({
-            id: crypto.randomUUID(),
-            name: file.name.replace(/\.[^/.]+$/, ""),
-            url: createManagedUrl(file),
-            size: file.size,
-            metadata: guessMetadata(file)
-        }));
+        const newFiles: VideoFile[] = files.map((file) => {
+            const guessedMetadata = guessMetadata(file);
+
+            return {
+                id: crypto.randomUUID(),
+                name: file.name.replace(/\.[^/.]+$/, ""),
+                url: createManagedUrl(file),
+                size: file.size,
+                metadata: {
+                    ...guessedMetadata,
+                    analysisStatus: 'pending',
+                    analysisError: undefined,
+                }
+            };
+        });
 
         setLibrary(prev => [...prev, ...newFiles]);
 
@@ -222,7 +334,46 @@ const App: React.FC = () => {
         ).catch((error) => {
             console.error('Failed to persist dropped files in IndexedDB:', error);
         });
-    }, [createManagedUrl]);
+
+        void (async () => {
+            for (let index = 0; index < files.length; index += 1) {
+                const file = files[index];
+                const video = newFiles[index];
+
+                try {
+                    const { metadata, report } = await analyzeMediaFile(file, video.metadata);
+                    await putTechnicalReport(video.id, report);
+
+                    setTechnicalReports((prev) => ({
+                        ...prev,
+                        [video.id]: report,
+                    }));
+
+                    updateVideoMetadata(video.id, () => ({
+                        ...metadata,
+                        analysisStatus: 'ready',
+                        analysisError: undefined,
+                    }));
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : 'Media analysis failed.';
+                    const fallbackReport = buildFallbackTechnicalReport(file, video.metadata, message);
+
+                    await putTechnicalReport(video.id, fallbackReport);
+
+                    setTechnicalReports((prev) => ({
+                        ...prev,
+                        [video.id]: fallbackReport,
+                    }));
+
+                    updateVideoMetadata(video.id, (previous) => ({
+                        ...previous,
+                        analysisStatus: 'failed',
+                        analysisError: message,
+                    }));
+                }
+            }
+        })();
+    }, [createManagedUrl, updateVideoMetadata]);
 
     const playVideo = useCallback((video: VideoFile) => {
         setLibrary(prev => prev.map(v => 
@@ -294,6 +445,7 @@ const App: React.FC = () => {
 
         if (currentVideo && idSet.has(currentVideo.id)) {
             setView('library');
+            setIsTechnicalReportLoading(false);
         }
 
         setPlaylists((prev) =>
@@ -305,7 +457,15 @@ const App: React.FC = () => {
 
         setWatchHistory((prev) => prev.filter((entry) => !idSet.has(entry.videoId)));
 
-        void Promise.all(ids.map((id) => deleteMediaBlob(id))).catch((error) => {
+        setTechnicalReports((prev) => {
+            const next = { ...prev };
+            ids.forEach((id) => {
+                delete next[id];
+            });
+            return next;
+        });
+
+        void Promise.all(ids.flatMap((id) => [deleteMediaBlob(id), deleteTechnicalReport(id)])).catch((error) => {
             console.error('Failed to delete videos from IndexedDB:', error);
         });
 
@@ -399,6 +559,8 @@ const App: React.FC = () => {
                     video={currentVideo} 
                     onBack={backToLibrary}
                     onProgress={(pos, dur) => handleVideoProgress(currentVideo.id, pos, dur)}
+                    technicalReport={technicalReports[currentVideo.id] ?? null}
+                    technicalReportLoading={isTechnicalReportLoading}
                 />
             </ErrorBoundary>
         );

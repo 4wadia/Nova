@@ -1,6 +1,9 @@
+import type { MediaTechnicalReport } from '../types';
+
 const DB_NAME = 'nova_media_db';
-const DB_VERSION = 1;
-const STORE_NAME = 'videos';
+const DB_VERSION = 2;
+const STORE_NAME_VIDEOS = 'videos';
+const STORE_NAME_TECHNICAL_REPORTS = 'technical_reports';
 
 interface StoredVideoBlob {
   id: string;
@@ -26,8 +29,12 @@ const openDatabase = (): Promise<IDBDatabase> => {
 
       request.onupgradeneeded = () => {
         const db = request.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(STORE_NAME_VIDEOS)) {
+          db.createObjectStore(STORE_NAME_VIDEOS, { keyPath: 'id' });
+        }
+
+        if (!db.objectStoreNames.contains(STORE_NAME_TECHNICAL_REPORTS)) {
+          db.createObjectStore(STORE_NAME_TECHNICAL_REPORTS, { keyPath: 'id' });
         }
       };
 
@@ -47,8 +54,8 @@ const runRequest = <T>(request: IDBRequest<T>): Promise<T> =>
 
 export const putMediaFile = async (id: string, file: File): Promise<void> => {
   const db = await openDatabase();
-  const tx = db.transaction(STORE_NAME, 'readwrite');
-  const store = tx.objectStore(STORE_NAME);
+  const tx = db.transaction(STORE_NAME_VIDEOS, 'readwrite');
+  const store = tx.objectStore(STORE_NAME_VIDEOS);
 
   const payload: StoredVideoBlob = {
     id,
@@ -64,8 +71,8 @@ export const putMediaFile = async (id: string, file: File): Promise<void> => {
 
 export const getMediaBlob = async (id: string): Promise<Blob | null> => {
   const db = await openDatabase();
-  const tx = db.transaction(STORE_NAME, 'readonly');
-  const store = tx.objectStore(STORE_NAME);
+  const tx = db.transaction(STORE_NAME_VIDEOS, 'readonly');
+  const store = tx.objectStore(STORE_NAME_VIDEOS);
   const result = await runRequest(store.get(id));
 
   if (!result) {
@@ -86,7 +93,35 @@ export const getMediaBlob = async (id: string): Promise<Blob | null> => {
 
 export const deleteMediaBlob = async (id: string): Promise<void> => {
   const db = await openDatabase();
-  const tx = db.transaction(STORE_NAME, 'readwrite');
-  const store = tx.objectStore(STORE_NAME);
+  const tx = db.transaction(STORE_NAME_VIDEOS, 'readwrite');
+  const store = tx.objectStore(STORE_NAME_VIDEOS);
+  await runRequest(store.delete(id));
+};
+
+export const putTechnicalReport = async (id: string, report: MediaTechnicalReport): Promise<void> => {
+  const db = await openDatabase();
+  const tx = db.transaction(STORE_NAME_TECHNICAL_REPORTS, 'readwrite');
+  const store = tx.objectStore(STORE_NAME_TECHNICAL_REPORTS);
+  await runRequest(store.put({ id, report }));
+};
+
+export const getTechnicalReport = async (id: string): Promise<MediaTechnicalReport | null> => {
+  const db = await openDatabase();
+  const tx = db.transaction(STORE_NAME_TECHNICAL_REPORTS, 'readonly');
+  const store = tx.objectStore(STORE_NAME_TECHNICAL_REPORTS);
+  const result = await runRequest(store.get(id));
+
+  if (!result || typeof result !== 'object') {
+    return null;
+  }
+
+  const maybeRecord = result as { report?: MediaTechnicalReport };
+  return maybeRecord.report ?? null;
+};
+
+export const deleteTechnicalReport = async (id: string): Promise<void> => {
+  const db = await openDatabase();
+  const tx = db.transaction(STORE_NAME_TECHNICAL_REPORTS, 'readwrite');
+  const store = tx.objectStore(STORE_NAME_TECHNICAL_REPORTS);
   await runRequest(store.delete(id));
 };
